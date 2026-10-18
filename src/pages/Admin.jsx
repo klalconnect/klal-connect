@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '@/api/client';
 import { DIRECTORY_CATEGORIES } from '@/lib/categories';
-import { Users, Building2, Search, Phone, MessageCircle, Bookmark, CheckCircle2 } from 'lucide-react';
+import { Users, Building2, Search, Phone, MessageCircle, Bookmark, CheckCircle2, ChevronDown, BadgeCheck, X } from 'lucide-react';
 import ShabbosSimulator from '@/components/ShabbosSimulator';
 import ShabbosGlobalOverride from '@/components/ShabbosGlobalOverride';
 import SiteSwitches from '@/components/admin/SiteSwitches';
@@ -10,7 +10,7 @@ import HealthPanel from '@/components/admin/HealthPanel';
 import SearchInsights from '@/components/admin/SearchInsights';
 import { iconFor, guessIcon, ICON_NAMES } from '@/lib/categoryIcons';
 const configs = [['Pending listings', 'Provider', { status: 'pending' }], ['Claim requests', 'ClaimRequest', { status: 'pending' }], ['Positive notes', 'CommunityNote', { status: 'pending' }], ['Private reports', 'PrivateReport', { status: 'open' }], ['Pending edits', 'ListingChangeRequest', { status: 'pending' }], ['Pending jobs', 'Job', { status: 'pending' }]];
-export default function Admin() {const [user, setUser] = useState(),[data, setData] = useState({}),[active, setActive] = useState('Pending listings'),[categories, setCategories] = useState([]),[events, setEvents] = useState([]),[users, setUsers] = useState([]),[providerCount, setProviderCount] = useState(0),[reportCount, setReportCount] = useState(0);useEffect(() => {(async () => {const u = await api.auth.me();setUser(u);if (u.role !== 'admin' && u.role !== 'moderator') return;const results = await Promise.all(configs.map(([, e, q]) => api.entities[e].filter(q)));setData(Object.fromEntries(configs.map((c, i) => [c[0], results[i]])));setCategories(await api.entities.Category.list('order'));setEvents(await api.entities.ActivityEvent.list('-created_date', 500));setUsers(await api.entities.User.list());setProviderCount((await api.entities.Provider.filter({ status: 'published' })).length);
+export default function Admin() {const [user, setUser] = useState(),[data, setData] = useState({}),[active, setActive] = useState('Pending listings'),[categories, setCategories] = useState([]),[events, setEvents] = useState([]),[users, setUsers] = useState([]),[published, setPublished] = useState([]),[reportCount, setReportCount] = useState(0);useEffect(() => {(async () => {const u = await api.auth.me();setUser(u);if (u.role !== 'admin' && u.role !== 'moderator') return;const results = await Promise.all(configs.map(([, e, q]) => api.entities[e].filter(q)));setData(Object.fromEntries(configs.map((c, i) => [c[0], results[i]])));setCategories(await api.entities.Category.list('order'));setEvents(await api.entities.ActivityEvent.list('-created_date', 500));setUsers(await api.entities.User.list());setPublished(await api.entities.Provider.filter({ status: 'published' }));
 try { setReportCount((await api.entities.ListingReport.list('-created_date', 500)).length); } catch {}
 })();}, []);if (!user) return <div className="loading">Checking administrator access…</div>;const isAdmin = user.role === 'admin';if (!isAdmin && user.role !== 'moderator') return <div className="empty m-6">Administrator access is required.</div>;const action = async (item, status) => {const cfg = configs.find((c) => c[0] === active);let next = status;if (status === 'approved' && active === 'Pending listings') next = 'published';if (status === 'approved' && active === 'Positive notes') next = 'published';if (status === 'approved' && active === 'Pending jobs') next = 'published';if (active === 'Claim requests') {
   // Approving a claim used to stamp the request and change nothing about the
@@ -21,7 +21,7 @@ try { setReportCount((await api.entities.ListingReport.list('-created_date', 500
   setData({ ...data, [active]: data[active].filter((x) => x.id !== item.id) });
   return;
 }
-await api.entities[cfg[1]].update(item.id, { status: next });setData({ ...data, [active]: data[active].filter((x) => x.id !== item.id) });};const stats = [['Total users', users.length, Users], ['Providers', providerCount, Building2], ['Searches', events.filter((e) => e.type === 'search').length, Search], ['Calls', events.filter((e) => e.type === 'call').length, Phone], ['Texts', events.filter((e) => e.type === 'text').length, MessageCircle], ['Saves', '—', Bookmark]];return <div className="page-shell py-5 md:py-9"><span className="eyebrow">ADMINISTRATION</span><h1 className="title text-2xl md:text-3xl">Community operations</h1><div className="my-4 grid grid-cols-3 gap-2 md:my-7 md:gap-3 lg:grid-cols-6">{stats.map(([n, v, I]) => <div className="rounded-lg bg-brand-surface p-3 ring-1 ring-brand-line md:p-5" key={n}><I className="text-brand-teal" size={18} /><strong className="mt-2 block text-xl md:mt-3 md:text-2xl">{v}</strong><span className="text-[11px] leading-tight text-brand-muted md:text-xs">{n}</span></div>)}</div><div className="grid grid-cols-[minmax(0,1fr)] gap-4 md:gap-6 lg:grid-cols-[240px_1fr]"><aside className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:mx-0 lg:block lg:space-y-2 lg:overflow-visible lg:px-0">{configs.map(([n]) => <button key={n} onClick={() => setActive(n)} className={`admin-nav shrink-0 ${active === n ? 'admin-nav-active' : ''}`}><span>{n}</span><b>{data[n]?.length || 0}</b></button>)}<button onClick={() => setActive('Listing reports')} className={`admin-nav shrink-0 ${active === 'Listing reports' ? 'admin-nav-active' : ''}`}><span>Listing reports</span><b>{reportCount}</b></button><button onClick={() => setActive('Insights')} className={`admin-nav shrink-0 ${active === 'Insights' ? 'admin-nav-active' : ''}`}><span>What people want</span><b>{events.filter((e) => e.type === 'search' && e.zero_result).length}</b></button>{isAdmin && <><button onClick={() => setActive('Site switches')} className={`admin-nav shrink-0 ${active === 'Site switches' ? 'admin-nav-active' : ''}`}><span>Site switches</span></button><button onClick={() => setActive('Shabbos tools')} className={`admin-nav shrink-0 ${active === 'Shabbos tools' ? 'admin-nav-active' : ''}`}><span>Shabbos tools</span></button><button onClick={() => setActive('Health')} className={`admin-nav shrink-0 ${active === 'Health' ? 'admin-nav-active' : ''}`}><span>Health</span><b>·</b></button><button onClick={() => setActive('Categories')} className={`admin-nav shrink-0 ${active === 'Categories' ? 'admin-nav-active' : ''}`}><span>Categories</span><b>{categories.length}</b></button><button onClick={() => setActive('Users')} className={`admin-nav shrink-0 ${active === 'Users' ? 'admin-nav-active' : ''}`}><span>Users</span><b>{users.length}</b></button></>}</aside><section className="min-w-0 md:my-3">{active === 'Site switches' && isAdmin ? <SiteSwitches /> : active === 'Shabbos tools' ? <div className="space-y-4"><ShabbosGlobalOverride />{isAdmin && <ShabbosSimulator />}</div> : active === 'Health' ? <HealthPanel /> : active === 'Insights' ? <SearchInsights events={events} /> : active === 'Listing reports' ? <ReportQueue user={user} /> : active === 'Categories' ? <CategoryAdmin items={categories} setItems={setCategories} /> : active === 'Users' ? <UserList users={users} me={user} onUpdate={(r) => setUsers(users.map((x) => x.id === r.id ? { ...x, ...r } : x))} onRole={async (u, role) => { try { const r = await api.admin.setRole(u.id, role); setUsers(users.map((x) => x.id === u.id ? { ...x, role: r.role } : x)); } catch (e) { alert(e.message || 'Could not change role'); } }} /> : <Queue title={active} items={data[active] || []} onAction={action} users={users} />}</section></div></div>;}
+await api.entities[cfg[1]].update(item.id, { status: next });setData({ ...data, [active]: data[active].filter((x) => x.id !== item.id) });};const stats = [['Total users', users.length, Users], ['Providers', published.length, Building2], ['Searches', events.filter((e) => e.type === 'search').length, Search], ['Calls', events.filter((e) => e.type === 'call').length, Phone], ['Texts', events.filter((e) => e.type === 'text').length, MessageCircle], ['Saves', '—', Bookmark]];return <div className="page-shell py-5 md:py-9"><span className="eyebrow">ADMINISTRATION</span><h1 className="title text-2xl md:text-3xl">Community operations</h1><div className="my-4 grid grid-cols-3 gap-2 md:my-7 md:gap-3 lg:grid-cols-6">{stats.map(([n, v, I]) => <div className="rounded-lg bg-brand-surface p-3 ring-1 ring-brand-line md:p-5" key={n}><I className="text-brand-teal" size={18} /><strong className="mt-2 block text-xl md:mt-3 md:text-2xl">{v}</strong><span className="text-[11px] leading-tight text-brand-muted md:text-xs">{n}</span></div>)}</div><div className="grid grid-cols-[minmax(0,1fr)] gap-4 md:gap-6 lg:grid-cols-[240px_1fr]"><aside className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden lg:mx-0 lg:block lg:space-y-2 lg:overflow-visible lg:px-0"><button onClick={() => setActive('Find a listing')} className={`admin-nav shrink-0 ${active === 'Find a listing' ? 'admin-nav-active' : ''}`}><span className="inline-flex items-center gap-1.5"><Search size={14} />Find a listing</span></button>{configs.map(([n]) => <button key={n} onClick={() => setActive(n)} className={`admin-nav shrink-0 ${active === n ? 'admin-nav-active' : ''}`}><span>{n}</span><b>{data[n]?.length || 0}</b></button>)}<button onClick={() => setActive('Listing reports')} className={`admin-nav shrink-0 ${active === 'Listing reports' ? 'admin-nav-active' : ''}`}><span>Listing reports</span><b>{reportCount}</b></button><button onClick={() => setActive('Insights')} className={`admin-nav shrink-0 ${active === 'Insights' ? 'admin-nav-active' : ''}`}><span>What people want</span><b>{events.filter((e) => e.type === 'search' && e.zero_result).length}</b></button>{isAdmin && <><button onClick={() => setActive('Site switches')} className={`admin-nav shrink-0 ${active === 'Site switches' ? 'admin-nav-active' : ''}`}><span>Site switches</span></button><button onClick={() => setActive('Shabbos tools')} className={`admin-nav shrink-0 ${active === 'Shabbos tools' ? 'admin-nav-active' : ''}`}><span>Shabbos tools</span></button><button onClick={() => setActive('Health')} className={`admin-nav shrink-0 ${active === 'Health' ? 'admin-nav-active' : ''}`}><span>Health</span><b>·</b></button><button onClick={() => setActive('Categories')} className={`admin-nav shrink-0 ${active === 'Categories' ? 'admin-nav-active' : ''}`}><span>Categories</span><b>{categories.length}</b></button><button onClick={() => setActive('Users')} className={`admin-nav shrink-0 ${active === 'Users' ? 'admin-nav-active' : ''}`}><span>Users</span><b>{users.length}</b></button></>}</aside><section className="min-w-0 md:my-3">{active === 'Find a listing' ? <FindListing listings={[...(data['Pending listings'] || []), ...published]} isAdmin={isAdmin} me={user} onChange={(row) => { setPublished((ps) => row.status === 'published' ? [row, ...ps.filter((x) => x.id !== row.id)] : ps.filter((x) => x.id !== row.id)); setData((d) => ({ ...d, 'Pending listings': (d['Pending listings'] || []).filter((x) => x.id !== row.id).concat(row.status === 'pending' ? [row] : []) })); }} /> : active === 'Site switches' && isAdmin ? <SiteSwitches /> : active === 'Shabbos tools' ? <div className="space-y-4"><ShabbosGlobalOverride />{isAdmin && <ShabbosSimulator />}</div> : active === 'Health' ? <HealthPanel /> : active === 'Insights' ? <SearchInsights events={events} /> : active === 'Listing reports' ? <ReportQueue user={user} /> : active === 'Categories' ? <CategoryAdmin items={categories} setItems={setCategories} /> : active === 'Users' ? <UserList users={users} me={user} onUpdate={(r) => setUsers(users.map((x) => x.id === r.id ? { ...x, ...r } : x))} onRole={async (u, role) => { try { const r = await api.admin.setRole(u.id, role); setUsers(users.map((x) => x.id === u.id ? { ...x, role: r.role } : x)); } catch (e) { alert(e.message || 'Could not change role'); } }} /> : <Queue title={active} items={data[active] || []} onAction={action} users={users} />}</section></div></div>;}
 // A claim asks staff to hand a business page from one person to another, and
 // the card showed the claimant's own typed text for the listing name with
 // nothing else — not who filed it, not the verification details they were
@@ -39,7 +39,104 @@ function ClaimFacts({ x, users }) {
   ].filter(([, v]) => v);
   return <dl className="mt-2 space-y-1 text-sm">{rows.map(([k, v]) => <div key={k} className="flex flex-wrap gap-x-2"><dt className="font-semibold text-brand-ink">{k}:</dt><dd className="min-w-0 text-brand-body">{v}</dd></div>)}</dl>;
 }
-function Queue({ title, items, onAction, users }) {return <div className="panel"><h2 className="section-title mb-4">{title}</h2>{items.length === 0 ? <p className="helper">Queue is clear.</p> : items.map((x) => <div key={x.id} className="border-b py-4 last:border-0"><strong>{x.name || x.title || x.provider_name || 'Submission'}</strong>{x.verification_details ? <ClaimFacts x={x} users={users} /> : <p className="mt-1 text-sm text-brand-body">{x.short_description || x.description || x.body || x.message || x.relationship || x.changes}</p>}{x.target_type === 'post' && x.target_id && <a href={`/feed?post=${encodeURIComponent(x.target_id)}`} target="_blank" rel="noreferrer" className="mt-2 inline-block text-sm font-semibold text-brand-teal hover:underline">Open the reported post ↗</a>}{x.verification_details && !x.provider_id && <p className="mt-2 text-sm font-semibold text-brand-error">This claim names no listing on the site, so approving it cannot hand anything over. Find or add the listing first.</p>}{x.provider_id && <a href={`/add?edit=${encodeURIComponent(x.provider_id)}`} target="_blank" rel="noreferrer" className="mt-2 inline-block text-sm font-semibold text-brand-teal hover:underline">Open the listing to edit ↗</a>}<div className="mt-3 flex gap-2"><button onClick={() => onAction(x, title === 'Private reports' ? 'resolved' : 'approved')} className="primary py-2"><CheckCircle2 size={15} />Approve / resolve</button><button onClick={() => onAction(x, 'rejected')} className="secondary py-2">Reject</button></div></div>)}</div>;}
+// Long queues (150+ pending listings) are searchable and collapsed to one
+// line per item, so a listing someone asks about can be found and acted on
+// without scrolling past everything else. Search reads the same fields staff
+// would be told over the phone: name, town, phone, email, website.
+const HAYSTACK = ['name', 'title', 'provider_name', 'short_description', 'description', 'body', 'message', 'city', 'state', 'country', 'phone', 'email', 'website', 'category', 'business_email', 'business_phone', 'relationship', 'changes'];
+function matches(x, q) {
+  const text = HAYSTACK.map((k) => (typeof x[k] === 'string' ? x[k] : '')).join(' ').toLowerCase();
+  const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+  const digits = q.replace(/\D/g, '');
+  if (digits.length >= 3 && text.replace(/\D/g, '').includes(digits)) return true;
+  return words.every((w) => text.includes(w));
+}
+function SearchBox({ value, onChange, placeholder }) {
+  return <label className="relative mb-3 block">
+    <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-brand-muted" />
+    <input type="text" inputMode="search" enterKeyHint="search" className="field mt-0 pl-9 pr-9" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} aria-label={placeholder} />
+    {value && <button type="button" onClick={() => onChange('')} className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-brand-muted hover:text-brand-ink" aria-label="Clear search"><X size={16} /></button>}
+  </label>;
+}
+function Row({ title, subtitle, chips, open, onToggle, children }) {
+  return <div className="border-b py-1 last:border-0">
+    <button type="button" onClick={onToggle} aria-expanded={open} className="flex w-full items-center gap-3 py-3 text-left">
+      <span className="min-w-0 flex-1">
+        <span className="flex flex-wrap items-center gap-2"><strong className="min-w-0 truncate text-brand-ink">{title}</strong>{chips}</span>
+        {subtitle && <span className="mt-0.5 block truncate text-sm text-brand-body">{subtitle}</span>}
+      </span>
+      <ChevronDown size={18} className={`shrink-0 text-brand-muted transition ${open ? 'rotate-180' : ''}`} />
+    </button>
+    {open && <div className="pb-4">{children}</div>}
+  </div>;
+}
+function useOpenRows(shown, q) {
+  const [open, setOpen] = useState(() => new Set());
+  // A search narrowed to a handful opens them, so the buttons are right there.
+  const auto = q.trim() && shown.length <= 3;
+  const isOpen = (id) => auto || open.has(id);
+  const toggle = (id) => setOpen((o) => { const n = new Set(o); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const allOpen = shown.length > 0 && shown.every((x) => open.has(x.id));
+  const toggleAll = () => setOpen(allOpen ? new Set() : new Set(shown.map((x) => x.id)));
+  return { isOpen, toggle, allOpen, toggleAll, auto };
+}
+function Queue({ title, items, onAction, users }) {
+  const [q, setQ] = useState('');
+  const shown = q.trim() ? items.filter((x) => matches(x, q)) : items;
+  const { isOpen, toggle, allOpen, toggleAll, auto } = useOpenRows(shown, q);
+  return <div className="panel">
+    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+      <h2 className="section-title">{title}</h2>
+      {shown.length > 0 && !auto && <button type="button" onClick={toggleAll} className="text-sm font-semibold text-brand-teal hover:underline">{allOpen ? 'Collapse all' : 'Expand all'}</button>}
+    </div>
+    {items.length > 0 && <SearchBox value={q} onChange={setQ} placeholder="Search name, town, phone, email" />}
+    {q.trim() && <p className="helper mb-2">{shown.length} of {items.length} match</p>}
+    {items.length === 0 ? <p className="helper">Queue is clear.</p> : shown.length === 0 ? <p className="helper">Nothing in this queue matches. Try Find a listing to search live listings too.</p> : shown.map((x) => { const sub = x.verification_details ? (x.relationship || x.business_email) : (x.short_description || x.description || x.body || x.message || x.relationship || x.changes); const full = x.description || x.body || x.message || x.changes; return <Row key={x.id} title={x.name || x.title || x.provider_name || 'Submission'} subtitle={sub} open={isOpen(x.id)} onToggle={() => toggle(x.id)}>
+      {x.verification_details ? <ClaimFacts x={x} users={users} /> : full && full !== sub && <p className="text-sm text-brand-body">{full}</p>}
+      {(x.city || x.phone || x.email) && !x.verification_details && <p className="mt-1 text-sm text-brand-muted">{[x.city && [x.city, x.state].filter(Boolean).join(', '), x.phone, x.email].filter(Boolean).join(' · ')}</p>}
+      {x.target_type === 'post' && x.target_id && <a href={`/feed?post=${encodeURIComponent(x.target_id)}`} target="_blank" rel="noreferrer" className="mt-2 inline-block text-sm font-semibold text-brand-teal hover:underline">Open the reported post ↗</a>}
+      {x.verification_details && !x.provider_id && <p className="mt-2 text-sm font-semibold text-brand-error">This claim names no listing on the site, so approving it cannot hand anything over. Find or add the listing first.</p>}
+      {x.provider_id && <a href={`/add?edit=${encodeURIComponent(x.provider_id)}`} target="_blank" rel="noreferrer" className="mt-2 inline-block text-sm font-semibold text-brand-teal hover:underline">Open the listing to edit ↗</a>}
+      <div className="mt-3 flex gap-2"><button onClick={() => onAction(x, title === 'Private reports' ? 'resolved' : 'approved')} className="primary py-2"><CheckCircle2 size={15} />Approve / resolve</button><button onClick={() => onAction(x, 'rejected')} className="secondary py-2">Reject</button></div>
+    </Row>; })}
+  </div>;
+}
+// Someone calls to confirm their page: find it among pending and live
+// listings alike, approve it if it is waiting, and tick Verified by Klal.
+function FindListing({ listings, isAdmin, me, onChange }) {
+  const [q, setQ] = useState('');
+  const [busy, setBusy] = useState('');
+  const hits = q.trim().length >= 2 ? listings.filter((x) => matches(x, q)) : [];
+  const shown = hits.slice(0, 25);
+  const { isOpen, toggle } = useOpenRows(shown, q);
+  const save = async (x, patch) => {
+    setBusy(x.id);
+    try { onChange({ ...x, ...(await api.entities.Provider.update(x.id, patch)) }); }
+    catch (e) { alert(e.message || 'Could not save that change'); }
+    finally { setBusy(''); }
+  };
+  const chip = (text, tone) => <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${tone}`}>{text}</span>;
+  return <div className="panel">
+    <h2 className="section-title mb-1">Find a listing</h2>
+    <p className="helper mb-3">Search pending and live listings to approve or verify one.</p>
+    <SearchBox value={q} onChange={setQ} placeholder="Search name, town, phone, email" />
+    {q.trim().length >= 2 && <p className="helper mb-2">{hits.length === 0 ? 'No listing matches.' : hits.length > shown.length ? `Showing the first ${shown.length} of ${hits.length}. Add a town or phone number to narrow it.` : `${hits.length} ${hits.length === 1 ? 'match' : 'matches'}`}</p>}
+    {shown.map((x) => <Row key={x.id} title={x.name || 'Listing'} subtitle={[x.category, [x.city, x.state].filter(Boolean).join(', ')].filter(Boolean).join(' · ')} open={isOpen(x.id)} onToggle={() => toggle(x.id)}
+      chips={<>{x.status === 'pending' ? chip('PENDING', 'bg-brand-gold-bg text-brand-gold-ink') : chip('LIVE', 'bg-brand-tint text-brand-teal')}{x.verified && chip('VERIFIED', 'bg-brand-navy text-white')}</>}>
+      {x.short_description && <p className="text-sm text-brand-body">{x.short_description}</p>}
+      {(x.phone || x.email || x.website) && <p className="mt-1 break-words text-sm text-brand-muted">{[x.phone, x.email, x.website].filter(Boolean).join(' · ')}</p>}
+      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm font-semibold">
+        {x.slug && x.status === 'published' && <a href={`/provider/${encodeURIComponent(x.slug)}`} target="_blank" rel="noreferrer" className="text-brand-teal hover:underline">Open the page ↗</a>}
+        <a href={`/add?edit=${encodeURIComponent(x.id)}`} target="_blank" rel="noreferrer" className="text-brand-teal hover:underline">Edit ↗</a>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {x.status === 'pending' && <button type="button" disabled={busy === x.id} onClick={() => save(x, { status: 'published' })} className="primary py-2"><CheckCircle2 size={15} />Approve</button>}
+        {isAdmin && <button type="button" disabled={busy === x.id} onClick={() => save(x, x.verified ? { verified: false, verified_at: null, verified_by: null } : { verified: true, verified_at: new Date().toISOString(), verified_by: me.id })} className="secondary py-2"><BadgeCheck size={15} />{x.verified ? 'Remove Verified by Klal' : 'Mark Verified by Klal'}</button>}
+        {x.status === 'pending' && <button type="button" disabled={busy === x.id} onClick={() => save(x, { status: 'rejected' })} className="secondary py-2">Reject</button>}
+      </div>
+    </Row>)}
+  </div>;
+}
 // A category with no icon showed the generic dots, which is what happened to
 // "Mikva". The icon is guessed from the name and can be changed here.
 function CategoryAdmin({ items, setItems }) {
