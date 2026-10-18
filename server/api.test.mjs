@@ -207,6 +207,26 @@ const one = await call('GET', `/entities/FeedPost/${post.id}`, { token: userB })
 ok(!('view_count' in (one.data || {})), 'single-row read also drops view_count');
 const rv = await call('POST', '/functions/recordPostView', { token: userB, body: { postId: post.id } });
 ok(rv.status === 200 && rv.data.count === undefined, 'recordPostView returns no count', JSON.stringify(rv.data));
+// Private analytics: profile views counted once a day per viewer, numbers only
+await call('POST', '/functions/recordProfileView', { token: userB, body: { userId: idA } });
+await call('POST', '/functions/recordProfileView', { token: userB, body: { userId: idA } });
+await call('POST', '/functions/recordProfileView', { token: userC, body: { userId: idA } });
+await call('POST', '/functions/recordProfileView', { token: userA, body: { userId: idA } });
+await call('POST', '/functions/recordProfileView', { token: guest, body: { userId: idA } });
+const an = await call('POST', '/functions/myAnalytics', { token: userA, body: { days: 7, tzOffset: 300 } });
+ok(an.status === 200 && an.data.totals.profile_views.count === 2, 'profile views: once per viewer per day, not your own, not the guest', JSON.stringify(an.data?.totals));
+ok(an.data.totals.impressions.count >= 1 && an.data.buckets.length === 7 && an.data.top_posts.some((p) => p.id === post.id), 'post views reach the author\'s analytics', JSON.stringify(an.data));
+ok(!JSON.stringify(an.data).includes(idB), 'analytics never names a viewer');
+const an90 = await call('POST', '/functions/myAnalytics', { token: userA, body: { days: 90 } });
+ok(an90.data.days === 90 && an90.data.buckets.length >= 13 && an90.data.buckets.length <= 14, '90 days come in weekly bars', String(an90.data.buckets.length));
+const anB = await call('POST', '/functions/myAnalytics', { token: userB, body: { days: 30 } });
+ok(anB.data.totals.profile_views.count === 0, 'nobody else\'s views land in your box');
+const evs = await call('GET', '/entities/ActivityEvent', { token: userA });
+ok(!evs.data.some((e) => e.type === 'member_profile_view' && e.created_by_id !== idA), 'the profile owner cannot list who viewed them');
+const forgedView = await call('POST', '/entities/ActivityEvent', { token: userC, body: { type: 'member_profile_view', target_id: idA } });
+ok(forgedView.status === 400, 'profile views cannot be written directly', String(forgedView.status));
+const anG = await call('POST', '/functions/myAnalytics', { token: guest, body: {} });
+ok(anG.status === 403, 'the guest has no analytics', String(anG.status));
 // Rows the guest wrote earlier read as Guest
 const tainted = await call('POST', '/entities/FeedPost', { token: admin, body: { body: 'old guest post', post_type: 'post', author_name: 'Eli Epstein', author_headline: 'Real headline', author_avatar_url: 'https://x/e.png', created_by: 'guest@klal.app', created_by_id: guestId } });
 ok(tainted.status === 201, 'admin planted a guest-authored row for the test');

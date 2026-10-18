@@ -873,6 +873,87 @@ export const functions = {
     return { recorded: true };
   },
 
+  // A member opening someone else's profile. Counted once per viewer per day,
+  // so coming back to a profile tomorrow counts again but a refresh does not.
+  // Only the number ever leaves the server (myAnalytics); who looked is kept
+  // to nobody, the profile owner included.
+  async recordProfileView({ userId }, user) {
+    need(userId, 'Missing profile.');
+    if (userId === user.id || user.email === GUEST_EMAIL) return { recorded: false };
+    const day = new Date().toISOString().slice(0, 10);
+    const seen = await store.filter('ActivityEvent', { type: 'member_profile_view', target_id: userId, created_by_id: user.id, day });
+    if (!seen.length) await store.create('ActivityEvent', { type: 'member_profile_view', target_id: userId, day }, user);
+    return { recorded: true };
+  },
+
+  // The private Analytics box on your own profile: how many people looked at
+  // it and how your posts did, over the last 7, 30 or 90 days, next to the
+  // same stretch before it. Counts only. Your own views, likes and comments
+  // on your own posts are left out.
+  async myAnalytics({ days, tzOffset }, user) {
+    if (user.email === GUEST_EMAIL) fail('Create an account to see your analytics.', 403);
+    const range = [7, 30, 90].includes(Number(days)) ? Number(days) : 30;
+    const DAY = 86_400_000;
+    // Days are the member's own calendar days, from their browser's offset.
+    const offset = Number.isFinite(Number(tzOffset)) ? Math.max(-840, Math.min(840, Number(tzOffset))) * 60_000 : 0;
+    const now = Date.now();
+    const todayStart = Math.floor((now - offset) / DAY) * DAY + offset;
+    const start = todayStart - (range - 1) * DAY;
+    const prevStart = start - range * DAY;
+    const at = (row) => Date.parse(row.created_date) || 0;
+    const others = (rows) => rows.filter((r) => r.created_by_id !== user.id);
+
+    const posts = (await store.filter('FeedPost', { created_by_id: user.id })).filter((p) => !isScheduled(p));
+    const ids = posts.map((p) => p.id);
+    const [profileViews, impressions, reactions, comments, reposts] = await Promise.all([
+      store.filter('ActivityEvent', { type: 'member_profile_view', target_id: user.id }),
+      ids.length ? store.filter('ActivityEvent', { type: 'post_view', target_id: ids }) : [],
+      ids.length ? store.filter('FeedLike', { post_id: ids }) : [],
+      ids.length ? store.filter('Comment', { post_id: ids }) : [],
+      ids.length ? store.filter('FeedPost', { repost_of: ids }) : [],
+    ]).then((sets) => sets.map(others));
+
+    const inRange = (rows) => rows.filter((r) => at(r) >= start);
+    const before = (rows) => rows.filter((r) => at(r) >= prevStart && at(r) < start).length;
+    const totals = {};
+    for (const [key, rows] of Object.entries({ profile_views: profileViews, impressions, reactions, comments, reposts })) {
+      totals[key] = { count: inRange(rows).length, before: before(rows) };
+    }
+
+    // Bars for the chart: a day each over a week or a month, a week each
+    // over three months, oldest first.
+    const step = range === 90 ? 7 : 1;
+    const buckets = [];
+    for (let s = start; s < todayStart + DAY; s += step * DAY) {
+      const e = Math.min(s + step * DAY, todayStart + DAY);
+      const within = (rows) => rows.filter((r) => at(r) >= s && at(r) < e).length;
+      buckets.push({ start: new Date(s).toISOString(), days: Math.round((e - s) / DAY), profile_views: within(profileViews), impressions: within(impressions) });
+    }
+
+    // Your best posts in this stretch, by who saw them, then by who answered.
+    const tally = (rows, field) => {
+      const m = new Map();
+      for (const r of inRange(rows)) m.set(r[field], (m.get(r[field]) || 0) + 1);
+      return m;
+    };
+    const seen = tally(impressions, 'target_id'), liked = tally(reactions, 'post_id'), said = tally(comments, 'post_id'), shared = tally(reposts, 'repost_of');
+    const top_posts = posts
+      .map((p) => ({
+        id: p.id,
+        excerpt: postExcerpt(p.body || p.repost_body, 90) || (p.image_urls?.length ? 'Photo post' : 'Post'),
+        created_date: p.publish_at || p.created_date,
+        impressions: seen.get(p.id) || 0,
+        reactions: liked.get(p.id) || 0,
+        comments: said.get(p.id) || 0,
+        reposts: shared.get(p.id) || 0,
+      }))
+      .filter((p) => p.impressions + p.reactions + p.comments + p.reposts > 0)
+      .sort((a, b) => b.impressions - a.impressions || (b.reactions + b.comments + b.reposts) - (a.reactions + a.comments + a.reposts))
+      .slice(0, 3);
+
+    return { days: range, since: new Date(start).toISOString(), totals, buckets, top_posts, post_count: posts.length };
+  },
+
   // ---- the post menu: save, report, delete ---------------------------------
 
   // A private bookmark. The row is the member's own (OWNER_SCOPED in app.js):

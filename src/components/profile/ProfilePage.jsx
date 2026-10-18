@@ -12,6 +12,7 @@ import ProfileSkills from '@/components/profile/ProfileSkills';
 import ProfileRecommendations from '@/components/profile/ProfileRecommendations';
 import ProfileActivity from '@/components/profile/ProfileActivity';
 import ProfileChecklist from '@/components/profile/ProfileChecklist';
+import ProfileAnalytics from '@/components/profile/ProfileAnalytics';
 import { loadMyConnections, suggestSimilar, connectedIds } from '@/lib/connections';
 import { companyPath, providerPath } from '@/lib/paths';
 
@@ -52,6 +53,9 @@ export default function ProfilePage({ userId }) {
       if (!alive) return;
       setUser(target);
       if (!target) { setLoading(false); return; }
+      // Counted for the owner's private Analytics box. Only the number is ever
+      // shown; the server skips your own profile and the guest.
+      if (!self && !u.guest) api.functions.invoke('recordProfileView', { userId: target.id }).catch(() => {});
       // The guest has no connections of its own (the server hides the seeded
       // ones), so this is empty for it, and the page reads the same either way.
       const conn = await loadMyConnections(u.id).catch(() => ({ sent: [], received: [], all: [] }));
@@ -126,6 +130,7 @@ export default function ProfilePage({ userId }) {
     {editable && <ProfileChecklist user={user} onEdit={(section) => setEditing(section)}/>}
 
     <ProfileHeader user={user} me={me} editable={editable} onSave={save} connections={connections} onReload={reload} companies={companies} connectionCount={theirIds.size} mutual={mutual} editing={editing} setEditing={setEditing}/>
+    {editable && <ProfileAnalytics/>}
     <ProfileAbout user={user} editable={editable} onSave={save} editing={editing} setEditing={setEditing}/>
     <ProfileExperience user={user} editable={editable} onSave={save} companies={companies} companyLogos={companyLogos} editing={editing} setEditing={setEditing}/>
     <ProfileSkills user={user} me={me} editable={editable} onSave={save} editing={editing} setEditing={setEditing}/>
