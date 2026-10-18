@@ -101,28 +101,45 @@ export function normalizeLogoUrl(raw) {
   return url;
 }
 
-// Photos of the business, each one credited.
+// Photos of the business.
 //
-// A listing may carry a few pictures, but every one has to say where it came
-// from and link to the official source, so a visitor can tell a photo the
-// business published from one somebody found. An uncredited image is refused
-// rather than silently dropped: a form that quietly loses a photo looks like
-// the upload failed, and the person uploads it again. safeUrl is handed in
-// because the http(s)-only check lives in the server's functions module and
-// this file is shared with the browser, which must not import that.
+// A listing may carry a few pictures. When anyone but the business adds one —
+// staff, or whoever typed the listing in — it has to say where it came from and
+// link to the official source, so a visitor can tell a photo the business
+// published from one somebody found. The listing's accepted owner is the
+// exception: their own pictures are theirs, so a credit and a source link are
+// optional, and the photo is marked from_owner so the page can say it came from
+// the business. That mark is decided here from who is saving, never taken from
+// the request. Staff saving a listing keep an owner photo's mark (matched by its
+// image), so tidying the page does not suddenly demand a credit for a picture
+// the owner put up.
+//
+// An uncredited image is refused rather than silently dropped: a form that
+// quietly loses a photo looks like the upload failed, and the person uploads it
+// again. safeUrl is handed in because the http(s)-only check lives in the
+// server's functions module and this file is shared with the browser, which
+// must not import that.
 //
 // Throws with statusCode 400 like the server's own fail(), so both routes can
 // answer with the message as written.
-export function normalizeGallery(raw, { safeUrl }) {
+export function normalizeGallery(raw, { safeUrl, byOwner = false, previous = [] }) {
   if (raw === null || raw === undefined || raw === '') return [];
   if (!Array.isArray(raw)) refuse('Photos must be a list.');
   if (raw.length > GALLERY_MAX) refuse(`A listing can show up to ${GALLERY_MAX} photos.`);
+  const before = (Array.isArray(previous) ? previous : []).filter((p) => p && typeof p === 'object');
+  const ownerPhotos = new Set(before.filter((p) => p.from_owner).map((p) => p.url));
+  const known = new Set(before.map((p) => p.url));
   return raw.map((item) => {
     if (!item || typeof item !== 'object') refuse('Each photo needs an image, a caption and a source link.');
     const url = String(item.url || '').trim();
     const caption = visibleText(item.caption).slice(0, 200);
     if (!url) refuse('Each photo needs an image.');
     if (!isOwnUploadUrl(url)) refuse('Photos have to be uploaded here, not linked from elsewhere.');
+    // The owner vouches for every photo they save without a credit; one they
+    // keep with a credit (say, a press shot staff added) stays credited.
+    if (ownerPhotos.has(url) || (byOwner && (!caption || !known.has(url)))) {
+      return { url, caption, source_url: safeUrl(item.source_url), from_owner: true };
+    }
     if (!caption) refuse('Each photo needs a caption saying where it came from, like "Photo: example.org".');
     const source_url = safeUrl(item.source_url);
     if (!source_url) refuse('Each photo needs a link to its official source.');
@@ -130,10 +147,15 @@ export function normalizeGallery(raw, { safeUrl }) {
   });
 }
 
-export function normalizeListingPatch(patch, row, { badgeById, badgeApplies, safeUrl }) {
+// user is whoever is saving; their being the listing's accepted owner is what
+// lets a photo go without a credit (see normalizeGallery).
+export function normalizeListingPatch(patch, row, { badgeById, badgeApplies, safeUrl, user = null }) {
   if (!patch || typeof patch !== 'object') return patch;
   const out = { ...patch };
-  if ('gallery' in out) out.gallery = normalizeGallery(out.gallery, { safeUrl });
+  if ('gallery' in out) {
+    const byOwner = !!user && !!listingEditor(row) && listingEditor(row) === user.id;
+    out.gallery = normalizeGallery(out.gallery, { safeUrl, byOwner, previous: row?.gallery });
+  }
   if ('logo_url' in out) out.logo_url = normalizeLogoUrl(out.logo_url);
   if ('minyanim' in out) out.minyanim = normalizeMinyanim(out.minyanim);
   const category = 'category' in out ? out.category : row?.category;

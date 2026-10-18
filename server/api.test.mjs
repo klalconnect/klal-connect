@@ -525,13 +525,27 @@ const galleryId = galleryListing.data?.provider?.id;
 ok(Array.isArray(galleryListing.data?.provider?.gallery) && galleryListing.data.provider.gallery.length === 0, 'a listing without photos stores an empty gallery', JSON.stringify(galleryListing.data?.provider?.gallery));
 let g = await call('PUT', `/entities/Provider/${galleryId}`, { token: galleryTok, body: { gallery: [photo(1), photo(2), photo(3), photo(4)] } });
 ok(g.status === 400, 'a fourth photo is refused on edit', JSON.stringify(g.data));
-g = await call('PUT', `/entities/Provider/${galleryId}`, { token: galleryTok, body: { gallery: [photo(1, { caption: '' })] } });
-ok(g.status === 400 && /caption/i.test(g.data?.error || ''), 'a photo without a caption is refused', JSON.stringify(g.data));
+// Staff adding a photo to someone else's listing still have to credit it.
+g = await call('PUT', `/entities/Provider/${galleryId}`, { token: admin, body: { gallery: [photo(1, { caption: '' })] } });
+ok(g.status === 400 && /caption/i.test(g.data?.error || ''), 'staff adding a photo without a caption are refused', JSON.stringify(g.data));
+g = await call('PUT', `/entities/Provider/${galleryId}`, { token: admin, body: { gallery: [photo(1, { source_url: '' })] } });
+ok(g.status === 400 && /source/i.test(g.data?.error || ''), 'staff adding a photo without a source link are refused', JSON.stringify(g.data));
 g = await call('PUT', `/entities/Provider/${galleryId}`, { token: galleryTok, body: { gallery: [photo(1, { source_url: 'javascript:alert(1)' })] } });
-ok(g.status === 400, 'a javascript: source link is refused', JSON.stringify(g.data));
+ok(g.status === 400, 'a javascript: source link is refused, even from the owner', JSON.stringify(g.data));
+// The owner's own photos are theirs: no credit or source needed, and the mark
+// that says so is the server's, not something a request can set.
+g = await call('PUT', `/entities/Provider/${galleryId}`, { token: galleryTok, body: { gallery: [photo(5, { caption: '', source_url: '' })] } });
+ok(g.status === 200 && g.data?.gallery?.[0]?.from_owner === true && g.data.gallery[0].caption === '', 'the owner can add a photo with no credit or source', JSON.stringify(g.data));
+g = await call('PUT', `/entities/Provider/${galleryId}`, { token: admin, body: { gallery: [photo(5, { caption: '', source_url: '' }), photo(6)] } });
+ok(g.status === 200 && g.data?.gallery?.[0]?.from_owner === true && !g.data.gallery[1].from_owner, 'staff keep an owner photo uncredited, and their own photo is not marked as the owner\'s', JSON.stringify(g.data));
+g = await call('PUT', `/entities/Provider/${galleryId}`, { token: admin, body: { gallery: [photo(6), photo(7, { caption: '', source_url: '', from_owner: true })] } });
+ok(g.status === 400 && /caption/i.test(g.data?.error || ''), 'staff cannot pass off a new photo as the owner\'s', JSON.stringify(g.data));
+g = await call('PUT', `/entities/Provider/${galleryId}`, { token: galleryTok, body: { gallery: [photo(6)] } });
+ok(g.status === 200 && !g.data?.gallery?.[0]?.from_owner, 'a credited staff photo the owner keeps stays credited', JSON.stringify(g.data));
 g = await call('PUT', `/entities/Provider/${galleryId}`, { token: galleryTok, body: { gallery: [photo(1), photo(2)] } });
 const galleryAfter = (await call('GET', `/entities/Provider/${galleryId}`, { token: galleryTok })).data || {};
-ok(g.status === 200 && JSON.stringify(galleryAfter.gallery) === JSON.stringify([photo(1), photo(2)]), 'a valid two-photo gallery round-trips', JSON.stringify(galleryAfter.gallery));
+const ownerPhoto = (n) => ({ ...photo(n), from_owner: true });
+ok(g.status === 200 && JSON.stringify(galleryAfter.gallery) === JSON.stringify([ownerPhoto(1), ownerPhoto(2)]), 'a valid two-photo gallery round-trips', JSON.stringify(galleryAfter.gallery));
 ok(JSON.stringify(galleryAfter.gallery) === JSON.stringify(g.data?.gallery), 'the PUT answer carries the stored gallery', JSON.stringify(g.data?.gallery));
 const stranger = await call('PUT', `/entities/Provider/${galleryId}`, { token: userB, body: { gallery: [photo(3)] } });
 ok(stranger.status === 403, 'someone else cannot set a listing\'s photos', String(stranger.status));
@@ -547,7 +561,7 @@ g = await call('PUT', `/entities/Provider/${galleryId}`, { token: galleryTok, bo
 ok(g.status === 400, 'a photo url over 2048 characters is refused', String(g.status));
 g = await call('PUT', `/entities/Provider/${galleryId}`, { token: galleryTok, body: { gallery: [photo(1, { url: '/api/files/local-1.png' })] } });
 ok(g.status === 200 && g.data?.gallery?.[0]?.url === '/api/files/local-1.png', 'a local-disk upload path is accepted as a photo', JSON.stringify(g.data?.gallery));
-g = await call('PUT', `/entities/Provider/${galleryId}`, { token: galleryTok, body: { gallery: [photo(1, { caption: '​‌ ﻿' })] } });
+g = await call('PUT', `/entities/Provider/${galleryId}`, { token: admin, body: { gallery: [photo(9, { caption: '​‌ ﻿' })] } });
 ok(g.status === 400 && /caption/i.test(g.data?.error || ''), 'a caption made only of zero-width characters is refused', JSON.stringify(g.data));
 g = await call('PUT', `/entities/Provider/${galleryId}`, { token: galleryTok, body: { gallery: [photo(1, { caption: '​Photo: example.org﻿' })] } });
 ok(g.status === 200 && g.data?.gallery?.[0]?.caption === 'Photo: example.org', 'zero-width characters are stripped from a real caption', JSON.stringify(g.data?.gallery));

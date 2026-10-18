@@ -85,11 +85,12 @@ export default function ProviderDetail(){
         {/* Below About and above the map, and absent entirely when there are
             no photos: an empty panel reads as something broken. Each image is
             credited and linked to where it came from, so a visitor can tell a
-            picture the business published from one someone found. */}
+            picture the business published from one someone found. A photo the
+            owner put up needs no credit; without one it says so plainly. */}
         {Array.isArray(provider.gallery)&&provider.gallery.length>0&&<section className="panel"><h2 className="section-title">Photos</h2>
           <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{provider.gallery.map((g,i)=><figure key={g.url+i} className="m-0">
-            <img src={g.url} alt={g.caption} loading="lazy" className="aspect-[4/3] w-full rounded-lg border border-brand-line object-cover"/>
-            <figcaption className="mt-2 text-sm text-brand-muted">{g.source_url?<a href={g.source_url} target="_blank" rel="noopener noreferrer" className="underline">{g.caption}</a>:g.caption}</figcaption>
+            <img src={g.url} alt={g.caption||`${provider.name} photo ${i+1}`} loading="lazy" className="aspect-[4/3] w-full rounded-lg border border-brand-line object-cover"/>
+            <figcaption className="mt-2 text-sm text-brand-muted">{g.source_url?<a href={g.source_url} target="_blank" rel="noopener noreferrer" className="underline">{g.caption||'Photo from the business'}</a>:(g.caption||(g.from_owner?'Photo from the business':''))}</figcaption>
           </figure>)}</div>
         </section>}
         <ListingLocation place={provider} onOpen={directions}/>

@@ -46,7 +46,7 @@ const STILL_UPLOADING='Your image is still uploading — one moment.';
 // `logo` is '' while the stored image is left alone, a URL once a new one has
 // uploaded, and null when the person has asked for the stored one to come
 // down. The third state is what lets an edit send logo_url: '' at all.
-export default function ListingForm({initialCategory='',initialName='',sourcePostId='',provider=null}){const vouchesOn=useVouchesEnabled();const [data,setData]=useState(()=>(provider?fromProvider(provider):{...blank,category:initialCategory,name:initialName})),[categories,setCategories]=useState([]),[done,setDone]=useState(false),[mine,setMine]=useState(false),[claimed,setClaimed]=useState(false),[logo,setLogo]=useState(''),[err,setErr]=useState(''),[busy,setBusy]=useState(false),[uploading,setUploading]=useState(false),[uploadErr,setUploadErr]=useState(''),[galleryUploading,setGalleryUploading]=useState(false);const logoInput=useRef(null),uploadSeq=useRef(0);useEffect(()=>{api.entities.Category.list('order').then(setCategories)},[]);const change=e=>setData({...data,[e.target.name]:e.target.value});
+export default function ListingForm({initialCategory='',initialName='',sourcePostId='',provider=null,ownerEdit=false}){const vouchesOn=useVouchesEnabled();const [data,setData]=useState(()=>(provider?fromProvider(provider):{...blank,category:initialCategory,name:initialName})),[categories,setCategories]=useState([]),[done,setDone]=useState(false),[mine,setMine]=useState(false),[claimed,setClaimed]=useState(false),[logo,setLogo]=useState(''),[err,setErr]=useState(''),[busy,setBusy]=useState(false),[uploading,setUploading]=useState(false),[uploadErr,setUploadErr]=useState(''),[galleryUploading,setGalleryUploading]=useState(false);const logoInput=useRef(null),uploadSeq=useRef(0);useEffect(()=>{api.entities.Category.list('order').then(setCategories)},[]);const change=e=>setData({...data,[e.target.name]:e.target.value});
   // The upload used to be fire-and-forget: a rejected request (too large, not
   // an image, storage down, session expired) threw inside the change handler
   // where nothing caught it, so the input looked accepted and `logo` stayed
@@ -143,10 +143,13 @@ export default function ListingForm({initialCategory='',initialName='',sourcePos
       these — and an owner fixing a phone number was told to write a full
       description first or lose the change. */}<label className="block">Full description<textarea className="field min-h-32" name="description" value={data.description} onChange={change} required={!provider}/></label><div className="space-y-2"><label className="block">Logo or main image<input ref={logoInput} type="file" accept="image/*" onChange={upload} disabled={uploading} className="field" aria-busy={uploading||undefined}/></label>{uploading&&<p className="helper text-sm">Uploading…</p>}{uploadErr&&<p className="text-sm font-semibold text-brand-error" role="alert">{uploadErr} <button type="button" className="underline" onClick={forgetUpload}>Dismiss</button></p>}{logo===null&&provider?.logo_url&&<p className="helper text-sm">The current image comes down when you save. <button type="button" className="underline" onClick={()=>setLogo('')}>Keep it</button></p>}{logo!==null&&(logo||provider?.logo_url)&&!uploading&&<div className="flex items-center gap-3"><img src={logo||provider.logo_url} alt="" className="h-16 w-16 rounded-lg object-cover ring-1 ring-brand-line"/><p className="helper text-sm">{logo?'New image ready — it is saved when you click the button below.':'Current image. Choose a file above to replace it.'}</p>{logo
   ? <button type="button" className="text-sm underline" onClick={()=>{setLogo('');forgetUpload()}}>Remove</button>
-  : <button type="button" className="text-sm underline" onClick={()=>{setLogo(null);forgetUpload()}}>Remove</button>}</div>}</div><GalleryEditor value={data.gallery} onChange={g=>setData(d=>({...d,gallery:typeof g==='function'?g(d.gallery):g}))} onUploading={galleryBusy}/>{!provider&&<label className="flex items-start gap-3 rounded-lg border border-brand-line p-4"><input type="checkbox" className="mt-1" checked={mine} onChange={e=>setMine(e.target.checked)}/><span><span className="block font-semibold text-brand-ink">This is my business</span><span className="block text-sm text-brand-body">Only the owner can edit a listing. Tick this and we will check with you before handing it over, so you can keep it up to date.</span></span></label>}{err&&<p className="text-sm font-semibold text-brand-error">{err}</p>}<button disabled={busy} className="primary w-full sm:w-auto disabled:opacity-60">{busy?(provider?'Saving…':'Publishing…'):(provider?'Save changes':'Publish my listing')}</button></form>}
+  : <button type="button" className="text-sm underline" onClick={()=>{setLogo(null);forgetUpload()}}>Remove</button>}</div>}</div><GalleryEditor value={data.gallery} ownerEdit={ownerEdit} onChange={g=>setData(d=>({...d,gallery:typeof g==='function'?g(d.gallery):g}))} onUploading={galleryBusy}/>{!provider&&<label className="flex items-start gap-3 rounded-lg border border-brand-line p-4"><input type="checkbox" className="mt-1" checked={mine} onChange={e=>setMine(e.target.checked)}/><span><span className="block font-semibold text-brand-ink">This is my business</span><span className="block text-sm text-brand-body">Only the owner can edit a listing. Tick this and we will check with you before handing it over, so you can keep it up to date.</span></span></label>}{err&&<p className="text-sm font-semibold text-brand-error">{err}</p>}<button disabled={busy} className="primary w-full sm:w-auto disabled:opacity-60">{busy?(provider?'Saving…':'Publishing…'):(provider?'Save changes':'Publish my listing')}</button></form>}
 function Field({label,...props}){return <label>{label}<input className="field" {...props}/></label>}
 
-// Up to three photos, each credited to the business's own site or page. The
+// Up to three photos, each credited to the business's own site or page —
+// unless the listing's owner is the one saving (ownerEdit), whose own pictures
+// need no credit, or the photo is one the owner put up (from_owner), which
+// staff can keep without crediting. The server applies the same rule. The
 // caption and source are asked for next to the picture rather than in a
 // separate step, because a photo without them is refused by the server and the
 // person should see why before they press Save. Uploading happens the moment a
@@ -158,7 +161,7 @@ function Field({label,...props}){return <label>{label}<input className="field" {
 // may be handed a function of the current list, because the upload awaits and
 // the `value` this closure captured is stale by the time it resolves — a photo
 // removed during the upload used to come back when the upload landed.
-export function GalleryEditor({ value = [], onChange, onUploading }){
+export function GalleryEditor({ value = [], ownerEdit = false, onChange, onUploading }){
   const [err,setErr]=useState('');
   const [uploading,setUploading]=useState(false);
   const set=(i,patch)=>onChange(value.map((g,j)=>j===i?{...g,...patch}:g));
@@ -173,16 +176,17 @@ export function GalleryEditor({ value = [], onChange, onUploading }){
     finally{ busy(false); }
   };
   return <fieldset className="rounded-lg border border-brand-line p-4">
-    <legend className="px-1 text-sm font-semibold text-brand-ink">Photos (up to {GALLERY_MAX}, official sources only)</legend>
-    <p className="helper mt-0">Only pictures the business itself has published.</p>
-    {value.length>0&&<ul className="mt-3 space-y-4">{value.map((g,i)=><li key={g.url+i} className="grid gap-3 sm:grid-cols-[96px_minmax(0,1fr)]">
+    <legend className="px-1 text-sm font-semibold text-brand-ink">{ownerEdit?`Photos (up to ${GALLERY_MAX})`:`Photos (up to ${GALLERY_MAX}, official sources only)`}</legend>
+    <p className="helper mt-0">{ownerEdit?'These are your own photos, so a credit and source link are optional. Without a credit, the page says "Photo from the business."':'Only pictures the business itself has published.'}</p>
+    {value.length>0&&<ul className="mt-3 space-y-4">{value.map((g,i)=>{const free=ownerEdit||g.from_owner;return <li key={g.url+i} className="grid gap-3 sm:grid-cols-[96px_minmax(0,1fr)]">
       <img src={g.url} alt={g.caption||`Photo ${i+1}`} className="h-24 w-24 rounded-lg border border-brand-line object-cover"/>
       <div className="grid gap-2">
-        <Field label="Credit (shown under the photo)" value={g.caption} onChange={e=>set(i,{caption:e.target.value})} placeholder="Photo: example.org" maxLength={200} required/>
-        <Field label="Official source link" type="url" value={g.source_url} onChange={e=>set(i,{source_url:e.target.value})} placeholder="https://" required/>
+        {!ownerEdit&&g.from_owner&&<p className="helper m-0 text-sm">Added by the business owner, so no credit is needed.</p>}
+        <Field label={free?'Credit (optional)':'Credit (shown under the photo)'} value={g.caption} onChange={e=>set(i,{caption:e.target.value})} placeholder="Photo: example.org" maxLength={200} required={!free}/>
+        <Field label={free?'Source link (optional)':'Official source link'} type="url" value={g.source_url} onChange={e=>set(i,{source_url:e.target.value})} placeholder="https://" required={!free}/>
         <button type="button" onClick={()=>remove(i)} className="justify-self-start text-sm font-semibold text-brand-error underline">Remove photo</button>
       </div>
-    </li>)}</ul>}
+    </li>;})}</ul>}
     {value.length<GALLERY_MAX&&<label className="mt-3 block text-sm">Add a photo<input type="file" accept="image/*" onChange={add} disabled={uploading} className="field"/></label>}
     {uploading&&<p className="helper">Uploading…</p>}
     {err&&<p className="text-sm font-semibold text-brand-error">{err}</p>}
