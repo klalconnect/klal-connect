@@ -16,7 +16,7 @@ const Home = HomeIcon;
 // Jobs is deliberately absent until real jobs exist: a nav item that always
 // leads to an empty room costs more trust than the feature earns. It is still
 // reachable at /jobs, and belongs back here once there is something in it.
-const links = [['Home','/',Home],['Resources','/directory',LayoutGrid],['Feed','/feed',Newspaper],['People','/people',Users],['Saved','/saved',Bookmark],['Profile','/profile',UserRound]];
+const links = [['Home','/',Home],['Feed','/feed',Newspaper],['Resources','/directory',LayoutGrid],['People','/people',Users],['Saved','/saved',Bookmark],['Profile','/profile',UserRound]];
 // The phone bar is not the desktop nav with smaller text: eight 47px targets
 // with 10px labels is a worse way to reach six places than six bigger ones.
 // Saved stays in the desktop nav and on the profile page rather than competing

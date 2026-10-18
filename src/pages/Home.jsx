@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/api/client';
 import useVouchesEnabled from '@/hooks/useVouchesEnabled';
-import { MapPin, Plus, ArrowRight, MessageCircle, ShieldCheck, Flame, Moon, Compass } from 'lucide-react';
+import { MapPin, Plus, ArrowRight, MessageCircle, ShieldCheck, Flame, Moon, Newspaper, PenSquare, Users } from 'lucide-react';
 import SearchPanel from '@/components/SearchPanel';
 import AddListingPrompt from '@/components/AddListingPrompt';
 import ResourceCard from '@/components/ResourceCard';
@@ -12,7 +12,8 @@ import { countMatches } from '@/lib/search';
 import { servesPlace, communitiesFrom } from '@/lib/place';
 import { useCommunity } from '@/lib/community';
 import { useShabbosStatus } from '@/hooks/useShabbosStatus';
-import { timeInZone } from '@/lib/time';
+import { timeInZone, timeAgo } from '@/lib/time';
+import { POST_TYPE_BY_ID, BADGE_TONES, normalizePostType } from '@/lib/postTypes';
 import { categoryLabel } from '@/lib/categories';
 
 // The words people actually use, as searches rather than category filters —
@@ -88,20 +89,39 @@ export default function Home() {
   const browseHere = `/browse${community ? `?location=${encodeURIComponent(community)}` : ''}`;
 
   return <div className="page-shell space-y-14 py-8 md:space-y-16 md:py-12">
-    {/* Search first. Everything that used to sit above it — slogan, mission,
-        a dark band — now sits below it. */}
+    {/* The feed leads: Klal Connect is first a place where the frum business
+        world talks to itself. The directory follows, as what you get once
+        you're here. */}
     <section>
-      <h1 className="max-w-3xl font-display text-2xl font-bold tracking-tight text-brand-ink sm:text-3xl md:text-5xl">Find a plumber, a gemach, a shul — from people who know.</h1>
-      <p className="mt-3 max-w-2xl text-base text-brand-body sm:text-lg">A directory of frum businesses, gemachim and community resources, {vouchesOn ? 'vouched for' : 'shared'} by members and checked by Klal.</p>
-      <div className="mt-6"><SearchPanel defaultLocation={community} /></div>
-      <div className="mt-4 flex flex-wrap items-center gap-2">
+      <span className="eyebrow">THE KLAL'S PROFESSIONAL NETWORK</span>
+      <h1 className="mt-2 max-w-3xl font-display text-2xl font-bold tracking-tight text-brand-ink sm:text-3xl md:text-5xl">Where frum professionals and businesses connect.</h1>
+      <p className="mt-3 max-w-2xl text-base text-brand-body sm:text-lg">Share what you're working on, ask the klal, promote your business and meet the people behind it.</p>
+      <div className="mt-6 flex flex-wrap gap-2">
+        <Link to="/feed" className="primary"><Newspaper size={16} />Open the feed</Link>
+        {me
+          ? <Link to="/feed" className="secondary"><PenSquare size={16} />Write a post</Link>
+          : <Link to="/register" className="secondary"><Users size={16} />Join free</Link>}
+      </div>
+    </section>
+
+    <FeedPreview />
+
+    {/* The directory, introduced as the bonus it now is. */}
+    <section className="space-y-4">
+      <div className="rounded-xl bg-brand-tint p-5 ring-1 ring-brand-teal/20">
+        <span className="eyebrow">AND ONCE YOU'RE HERE</span>
+        <h2 className="mt-1 font-heading text-xl font-bold text-brand-ink sm:text-2xl">Use it as a resource too.</h2>
+        <p className="mt-1 text-sm text-brand-body sm:text-base">Find a plumber, a gemach, a shul or a therapist from a directory of frum businesses and community resources.</p>
+      </div>
+      <SearchPanel defaultLocation={community} />
+      <div className="flex flex-wrap items-center gap-2">
         {quickLinks.map(({ label, q, count }) => <Link
           key={q}
           to={`/browse?q=${encodeURIComponent(q)}${community ? `&location=${encodeURIComponent(community)}` : ''}`}
           className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold transition ${count > 0 ? 'bg-brand-tint text-brand-teal hover:ring-1 hover:ring-brand-teal' : 'text-brand-muted ring-1 ring-brand-line hover:text-brand-ink'}`}
         >{label}{count > 0 && <span className="text-xs font-bold text-brand-teal/70">{count}</span>}</Link>)}
       </div>
-      <AddListingPrompt className="mt-5" />
+      <AddListingPrompt />
     </section>
 
     {/* Choosing a community here is remembered everywhere else on the site. */}
@@ -149,10 +169,10 @@ export default function Home() {
         past a manifesto to reach the search box. */}
     <section className="grid gap-6 md:grid-cols-2">
       <div className="panel space-y-3">
-        <Compass size={22} className="text-brand-teal" />
-        <h2 className="font-heading text-xl font-bold text-brand-ink">Use it as a resource</h2>
-        <p className="leading-7 text-brand-body">Find a doctor, a gemach, a tutor, a caterer — wherever you are. Search, save, and reach people the community already relies on.</p>
-        <Link to="/directory" className="secondary inline-flex"><ArrowRight size={16} />Explore the directory</Link>
+        <Newspaper size={22} className="text-brand-teal" />
+        <h2 className="font-heading text-xl font-bold text-brand-ink">Use it to connect</h2>
+        <p className="leading-7 text-brand-body">Post updates, ask questions, share what you know and build a network inside the community.</p>
+        <Link to="/feed" className="secondary inline-flex"><ArrowRight size={16} />Go to the feed</Link>
       </div>
       <div className="panel space-y-3">
         <MessageCircle size={22} className="text-brand-gold-ink" />
@@ -168,6 +188,41 @@ export default function Home() {
       <p className="mx-auto mt-3 max-w-xl text-brand-body">No public negative reviews and no rating wars. Klal Connect shows community usage{vouchesOn ? ' and positive experiences' : ''}, and handles corrections privately — because a livelihood is on the other end of every listing.</p>
     </section>
   </div>;
+}
+
+// The three newest posts, as a taste of the feed. The full post, with its
+// likes and comments, is one tap away.
+function FeedPreview() {
+  const { data: posts = [], isLoading } = useQuery({
+    queryKey: ['feed', 'home-preview'],
+    queryFn: () => api.entities.FeedPost.list('-created_date', 3),
+  });
+  return <section>
+    <div className="section-head">
+      <div><span className="eyebrow">KLAL FEED</span><h2 className="title">Happening now</h2></div>
+      <Link to="/feed" className="text-sm font-semibold text-brand-teal">See the feed</Link>
+    </div>
+    {isLoading && <div className="loading">Loading feed…</div>}
+    {!isLoading && posts.length === 0 && <div className="empty"><p>Be the first to post to the Klal feed.</p><Link to="/feed" className="primary"><PenSquare size={16} />Write a post</Link></div>}
+    <div className="space-y-3">
+      {posts.slice(0, 3).map((p) => {
+        const type = POST_TYPE_BY_ID[normalizePostType(p.post_type)];
+        return <Link key={p.id} to={`/feed?post=${encodeURIComponent(p.id)}`} className="block rounded-xl bg-brand-surface p-4 ring-1 ring-brand-line transition hover:ring-brand-teal/50">
+          <div className="flex items-start gap-3">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-brand-tint font-bold text-brand-teal">{(p.author_name || '?').trim().charAt(0).toUpperCase()}</span>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <span className="truncate font-semibold text-brand-ink">{p.author_name || 'Member'}</span>
+                <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${BADGE_TONES[type.tone]}`}>{type.badge}</span>
+              </div>
+              {(p.author_headline || p.created_date) && <p className="truncate text-xs text-brand-muted">{[p.author_headline, p.created_date && timeAgo(p.created_date)].filter(Boolean).join(' · ')}</p>}
+              <p className="mt-2 line-clamp-3 text-sm leading-6 text-brand-body">{p.body}</p>
+            </div>
+          </div>
+        </Link>;
+      })}
+    </div>
+  </section>;
 }
 
 // Everything that serves this community, plus the times that govern the week
