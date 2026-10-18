@@ -21,6 +21,7 @@ import { listingEditor, normalizeListingPatch, canSetPaymentLink } from '../src/
 import { verificationAfterEdit, pinAfterEdit, hasCoordinate } from '../src/lib/trust.js';
 import { isValidTimeZone } from './shabbos.js';
 import { isScheduled, byPostedAtDesc } from '../src/lib/scheduledPosts.js';
+import { BOOKING_LABELS, DEFAULT_BOOKING_LABEL, withScheme } from '../src/lib/booking.js';
 import { isDemoMode } from './db.js';
 import { ensureDemoData } from './demo-seed.js';
 import { ensureCoreCategories } from './ensure-core.js';
@@ -854,6 +855,13 @@ app.put('/api/auth/me', requireAuth, async (req, res, next) => {
       })
       .slice(0, 30);
   }
+  // The booking button is an href every visitor can click, so only a real
+  // http(s) link is stored, and the wording is one of the fixed choices.
+  if ('booking_url' in safe) {
+    try { safe.booking_url = safeExternalUrl(withScheme(safe.booking_url)); }
+    catch (err) { return res.status(err.statusCode || 400).json({ error: err.message }); }
+  }
+  if ('booking_label' in safe && !BOOKING_LABELS.includes(safe.booking_label)) safe.booking_label = DEFAULT_BOOKING_LABEL;
   res.json(userToPublic(await users.update(req.user.id, safe)));
 });
 

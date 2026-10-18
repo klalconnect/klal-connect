@@ -283,6 +283,16 @@ const skillOwnerId = (await call('GET', '/auth/me', { token: skillOwnerTok })).d
 const dupeSkills = await call('PUT', '/auth/me', { token: skillOwnerTok, body: { skills: ['Bookkeeping', 'bookkeeping', '  Excel  ', ''] } });
 ok(JSON.stringify(dupeSkills.data.skills) === JSON.stringify(['Bookkeeping', 'Excel']), 'skills are trimmed and case-insensitively de-duplicated', JSON.stringify(dupeSkills.data.skills));
 
+// ---- booking button ---------------------------------------------------------
+let bookR = await call('PUT', '/auth/me', { token: skillOwnerTok, body: { booking_url: 'javascript:alert(1)' } });
+ok(bookR.status === 400, 'a javascript: booking link is refused');
+bookR = await call('PUT', '/auth/me', { token: skillOwnerTok, body: { booking_url: 'calendly.com/skillowner', booking_label: 'Schedule a call' } });
+ok(bookR.status === 200 && bookR.data.booking_url === 'https://calendly.com/skillowner' && bookR.data.booking_label === 'Schedule a call', 'a bare booking link gets https:// and the wording saves', JSON.stringify(bookR.data));
+bookR = await call('PUT', '/auth/me', { token: skillOwnerTok, body: { booking_label: 'Click here to win' } });
+ok(bookR.status === 200 && bookR.data.booking_label === 'Book an appointment', 'booking wording outside the list falls back to the default', JSON.stringify(bookR.data.booking_label));
+const bookPublic = await call('GET', `/users/${skillOwnerId}`, { token: userB });
+ok(bookPublic.data.booking_url === 'https://calendly.com/skillowner', 'other members see the booking link', JSON.stringify(bookPublic.data.booking_url));
+
 const selfEndorse = await call('POST', '/functions/toggleSkillEndorsement', { token: skillOwnerTok, body: { user_id: skillOwnerId, skill: 'Excel' } });
 ok(selfEndorse.status === 400, 'cannot endorse your own skill');
 
