@@ -108,7 +108,7 @@ export default function Home() {
 
     {/* The directory, introduced as the bonus it now is. */}
     <section className="space-y-4">
-      <div className="rounded-xl bg-brand-tint p-5 ring-1 ring-brand-teal/20">
+      <div className="rounded-xl bg-brand-surface p-5 ring-1 ring-brand-teal/30">
         <span className="eyebrow">AND ONCE YOU'RE HERE</span>
         <h2 className="mt-1 font-heading text-xl font-bold text-brand-ink sm:text-2xl">Use it as a resource too.</h2>
         <p className="mt-1 text-sm text-brand-body sm:text-base">Find a plumber, a gemach, a shul or a therapist from a directory of frum businesses and community resources.</p>
