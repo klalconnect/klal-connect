@@ -1,22 +1,24 @@
 import React, { useState } from 'react';
 import { Languages, Loader2 } from 'lucide-react';
 import { api } from '@/api/client';
-import { preferredTranslateLang, setPreferredTranslateLang } from '@/lib/translateLang';
+import { needsTranslation, preferredTranslateLang, setPreferredTranslateLang } from '@/lib/translateLang';
 
 // Click-to-translate, the way Facebook and LinkedIn do it: the original text
 // always stays put, and a small link reveals a translation beneath it rather
 // than replacing anything — nobody's words get silently rewritten.
 //
 // `enabled`/`languages` come from GET /api/config, so this renders nothing at
-// all (not even the button) until a Google Cloud Translation key exists.
-export default function TranslateToggle({ text, enabled, languages = [] }) {
+// all (not even the button) until a translation key exists. It also stays out
+// of the way on a post already in the reader's language.
+export default function TranslateToggle({ text, enabled, languages = [], user }) {
   const [shown, setShown] = useState(false);
   const [result, setResult] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [lang, setLang] = useState(preferredTranslateLang);
+  const [lang, setLang] = useState(() => preferredTranslateLang(user));
 
   if (!enabled || !String(text || '').trim()) return null;
+  if (!result && !needsTranslation(text, lang)) return null;
 
   const run = async (target) => {
     setBusy(true);
@@ -37,7 +39,7 @@ export default function TranslateToggle({ text, enabled, languages = [] }) {
   const changeLang = (e) => {
     const next = e.target.value;
     setLang(next);
-    setPreferredTranslateLang(next);
+    setPreferredTranslateLang(next, user);
     setResult(null);
     run(next);
   };
@@ -51,12 +53,12 @@ export default function TranslateToggle({ text, enabled, languages = [] }) {
         className="flex items-center gap-1 font-semibold text-brand-teal hover:underline"
       >
         {busy ? <Loader2 size={12} className="animate-spin" /> : <Languages size={12} />}
-        {shown ? 'Hide translation' : 'Translate'}
+        {shown ? 'Hide translation' : `Translate to ${languages.find((l) => l.code === lang)?.label || 'your language'}`}
       </button>
       {error && <p className="mt-1 text-brand-error">{error}</p>}
       {shown && result && (
         <div className="mt-1.5 rounded-lg bg-brand-tint/60 p-2.5 text-brand-body">
-          <p className="whitespace-pre-line leading-6">{result.text}</p>
+          <p dir="auto" className="whitespace-pre-line leading-6">{result.text}</p>
           <select
             value={lang}
             onChange={changeLang}

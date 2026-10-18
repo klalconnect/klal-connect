@@ -129,7 +129,7 @@ function ScheduledPostItem({ post, onChanged, onDeleted }) {
         <button type="submit" disabled={!!busy} className="primary py-2">{busy==='save'&&<Loader2 size={15} className="animate-spin"/>}Save changes</button>
       </div>
     </form>:<>
-      {post.body&&<p className="whitespace-pre-line leading-7 text-brand-body">{post.body}</p>}
+      {post.body&&<p dir="auto" className="whitespace-pre-line leading-7 text-brand-body">{post.body}</p>}
       {post.image_urls?.length>0&&<div className="grid gap-2 sm:grid-cols-2">{post.image_urls.map(u=><img key={u} src={u} className="rounded-lg ring-1 ring-brand-line"/>)}</div>}
       <div className="flex flex-wrap items-center gap-2 border-t pt-3 text-brand-body">
         <button type="button" onClick={()=>setEditing(true)} disabled={!!busy} className={btn}><Pencil size={14}/>Edit</button>
@@ -221,8 +221,8 @@ function LivePostItem({ post, user, onDeleted, onReposted }) {
       </div>
       <FeedPostMenu post={post} user={user} onReport={()=>setReporting(true)} onDeleted={onDeleted}/>
     </div>
-    {post.body&&<p className="whitespace-pre-line leading-7 text-brand-body">{post.body}</p>}
-    {post.body&&<TranslateToggle text={post.body} enabled={translate.enabled} languages={translate.languages}/>}
+    {post.body&&<p dir="auto" className="whitespace-pre-line leading-7 text-brand-body">{post.body}</p>}
+    {post.body&&<TranslateToggle text={post.body} enabled={translate.enabled} languages={translate.languages} user={user}/>}
     {isRepost&&<RepostedCard post={post}/>}
     {post.image_urls?.length>0&&<div className="grid gap-2 sm:grid-cols-2">{post.image_urls.map(u=><img key={u} src={u} className="rounded-lg ring-1 ring-brand-line"/>)}</div>}
     {reporting&&<ReportPostForm post={post} onClose={()=>setReporting(false)}/>}

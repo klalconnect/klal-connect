@@ -17,6 +17,7 @@ process.env.KC_STORE = 'memory';
 // ---- disabled without a key --------------------------------------------------
 console.log('\nno key configured:');
 delete process.env.GOOGLE_TRANSLATE_API_KEY;
+delete process.env.ANTHROPIC_API_KEY;
 globalThis.fetch = async () => { throw new Error('must not call out with no key'); };
 const disabled = await import(`${MOD_URL}?v=disabled`);
 check('translateEnabled() is false', disabled.translateEnabled() === false);
@@ -69,6 +70,35 @@ globalThis.fetch = async () => ({ ok: false, status: 403, json: async () => ({ e
 const broken = await import(`${MOD_URL}?v=broken`);
 try { await broken.translate('a new sentence nobody cached yet', 'he'); check('upstream error surfaces as 503', false); }
 catch (err) { check('upstream error surfaces as 503', err.statusCode === 503, err.message); }
+
+// ---- Claude engine (preferred when ANTHROPIC_API_KEY is set) ----------------
+console.log('\nclaude key configured:');
+process.env.ANTHROPIC_API_KEY = 'test-claude-key';
+// The SDK keeps the fetch it was built with, so one stub serves both cases.
+let claudeCalls = 0;
+let claudeDown = false;
+globalThis.fetch = async (url, opts) => {
+  if (claudeDown) return new Response(JSON.stringify({ type: 'error', error: { type: 'authentication_error', message: 'bad key' } }), { status: 401, headers: { 'content-type': 'application/json' } });
+  claudeCalls++;
+  const body = JSON.parse(opts.body);
+  check('claude request goes to the messages endpoint', String(url).includes('/v1/messages'), String(url));
+  check('claude request names the target language', body.messages[0].content.startsWith('Translate into English'), body.messages[0].content.slice(0, 40));
+  return new Response(JSON.stringify({
+    id: 'msg_1', type: 'message', role: 'assistant', model: 'claude-opus-5-5', stop_reason: 'end_turn',
+    content: [{ type: 'text', text: 'Baruch Hashem, we made a simcha.' }],
+    usage: { input_tokens: 10, output_tokens: 10 },
+  }), { status: 200, headers: { 'content-type': 'application/json' } });
+};
+const viaClaude = await import(`${MOD_URL}?v=claude`);
+check('engine is claude', viaClaude.translateEngine() === 'claude');
+const c1 = await viaClaude.translate('ברוך השם, מיר האבן געמאכט א שמחה', 'en');
+check('claude translation returned', c1.text === 'Baruch Hashem, we made a simcha.', c1);
+await viaClaude.translate('ברוך השם, מיר האבן געמאכט א שמחה', 'en');
+check('repeat served from cache', claudeCalls === 1, claudeCalls);
+
+claudeDown = true;
+try { await viaClaude.translate('something new', 'en'); check('claude error surfaces as 503', false); }
+catch (err) { check('claude error surfaces as 503', err.statusCode === 503, err.message); }
 
 console.log(failures ? `\n${failures} FAILURE(S)` : '\ntranslate.js behaves correctly with and without a key');
 process.exit(failures ? 1 : 0);

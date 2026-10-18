@@ -669,6 +669,7 @@ function publicProfile(user) {
   const {
     email, phone, latitude, longitude, timezone, country_code,
     candle_lighting_offset_minutes, havdalah_method, shabbos_full_lock, shabbos_mode_source,
+    translate_language,
     ...safe
   } = user;
   return safe;
@@ -837,6 +838,9 @@ app.put('/api/auth/me', requireAuth, async (req, res, next) => {
   if (isGuest(req.user)) return res.status(403).json({ error: 'Create an account to have a profile of your own.', guest: true });
   // Role and verification are server-owned; a user cannot promote themselves.
   const { role, verified, password_hash, email, id, ...safe } = req.body || {};
+  if ('translate_language' in safe && !TRANSLATE_LANGUAGES.some((l) => l.code === safe.translate_language)) {
+    return res.status(400).json({ error: 'That is not a language posts can be translated into.' });
+  }
   // Free text a member can otherwise fill their profile with unbounded, one
   // entry per line of a chip input — capped and de-duplicated (case-insensitive,
   // first spelling wins) so the skills section cannot become a spam dumping

@@ -2,12 +2,20 @@
 // is: the API key must never ship to the client, and results are cheap to
 // cache since the same post or comment gets translated by more than one reader.
 //
-// Gated behind GOOGLE_TRANSLATE_API_KEY. With no key set, translate() throws
-// and the client never shows a "Translate" affordance in the first place —
-// see translateEnabled in GET /api/config.
+// Two possible engines. Claude (ANTHROPIC_API_KEY) is preferred: Google's
+// Yiddish is weak — it reads Hasidic spelling and the Loshon Kodesh words
+// mixed into everyday frum Yiddish and English as noise — while Claude keeps
+// "Baruch Hashem", "shul" and "simcha" as the community says them. Google
+// (GOOGLE_TRANSLATE_API_KEY) is the fallback engine if only that key exists.
+// With neither set, translate() throws and the client never shows a
+// "Translate" affordance in the first place — see translateEnabled in
+// GET /api/config.
+import Anthropic from '@anthropic-ai/sdk';
 import { geoCache } from './db.js';
 
+const CLAUDE_KEY = process.env.ANTHROPIC_API_KEY || '';
 const API_KEY = process.env.GOOGLE_TRANSLATE_API_KEY || '';
+const CLAUDE_MODEL = 'claude-opus-5-5';
 const TRANSLATE_TTL = 30 * 24 * 60 * 60 * 1000; // wording of a post never changes once written
 const UPSTREAM_TIMEOUT_MS = 8000;
 const MAX_CHARS = 2000; // a post or comment, not an essay — keeps billing bounded
@@ -34,7 +42,46 @@ class TranslateError extends Error {
 }
 
 export function translateEnabled() {
-  return Boolean(API_KEY);
+  return Boolean(CLAUDE_KEY || API_KEY);
+}
+
+export function translateEngine() {
+  if (CLAUDE_KEY) return 'claude';
+  if (API_KEY) return 'google';
+  return '';
+}
+
+const LABEL = Object.fromEntries(LANGUAGES.map((l) => [l.code, l.label]));
+const SYSTEM = `You translate posts and comments on Klal Connect, a networking site for the Orthodox Jewish community. Posts may be in English, Hebrew, Yiddish (including Hasidic spelling, with or without nekudos), or other languages, and often mix them.
+
+Rules:
+- Reply with only the translation. No preface, notes, quotes or explanation.
+- Keep the poster's tone, line breaks, names, phone numbers, emails, links and emoji exactly.
+- Keep common Jewish terms the community uses as-is in the target language instead of literal glosses (for English: Baruch Hashem, shul, simcha, Shabbos, Yom Tov, bochur, kallah, chasunah, gemach, and so on). Use Ashkenazi English transliteration, as the community writes it.
+- If the text is already entirely in the target language, return it unchanged.`;
+
+let claude;
+async function translateWithClaude(clean, lang) {
+  claude ||= new Anthropic({ apiKey: CLAUDE_KEY, timeout: UPSTREAM_TIMEOUT_MS * 2, maxRetries: 1 });
+  let msg;
+  try {
+    msg = await claude.beta.messages.create({
+      model: CLAUDE_MODEL,
+      max_tokens: 4000,
+      output_config: { effort: 'low' },
+      betas: ['server-side-fallback-2026-07-01'],
+      fallbacks: 'default',
+      system: SYSTEM,
+      messages: [{ role: 'user', content: `Translate into ${LABEL[lang]}:\n\n${clean}` }],
+    });
+  } catch (err) {
+    console.warn('[translate] claude request failed', { status: err?.status, reason: err?.name || 'unknown' });
+    throw new TranslateError(UNAVAILABLE, err?.status === 429 ? 429 : 503);
+  }
+  if (msg.stop_reason === 'refusal') throw new TranslateError(UNAVAILABLE, 503);
+  const text = (msg.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('').trim();
+  if (!text) throw new TranslateError(UNAVAILABLE, 503);
+  return { text, detectedSourceLanguage: '' };
 }
 
 // A crude but fast hash — cache keys just need to be short and collision-free
@@ -55,9 +102,16 @@ export async function translate(text, target) {
   const lang = String(target || '').trim().toLowerCase();
   if (!LANGUAGE_CODES.has(lang)) throw new TranslateError('Unsupported target language.', 400);
 
-  const key = `translate:${lang}:${hashOf(clean)}`;
+  const engine = translateEngine();
+  const key = `translate:${engine}:${lang}:${hashOf(clean)}`;
   const hit = await geoCache.get(key);
   if (hit) return hit;
+
+  if (engine === 'claude') {
+    const result = await translateWithClaude(clean, lang);
+    await geoCache.set(key, result, TRANSLATE_TTL);
+    return result;
+  }
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
