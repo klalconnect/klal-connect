@@ -6,7 +6,13 @@ import { api } from '@/api/client';
 // people looked at your profile and how your posts did, over a stretch you
 // pick. Nobody else ever sees it, and it shows numbers only, never names.
 
-const RANGES = [7, 30, 90];
+const RANGES = [
+  { id: 7, label: '7 days', span: 'the last 7 days', before: 'the 7 days before' },
+  { id: 30, label: '30 days', span: 'the last 30 days', before: 'the 30 days before' },
+  { id: 90, label: '90 days', span: 'the last 90 days', before: 'the 90 days before' },
+  { id: 365, label: '1 year', span: 'the last year', before: 'the year before' },
+  { id: 'all', label: 'All time', span: 'all time' },
+];
 
 const TILES = [
   { key: 'profile_views', label: 'Profile views', icon: Users, chart: true },
@@ -17,12 +23,13 @@ const TILES = [
 ];
 
 const fmt = (n) => Number(n || 0).toLocaleString();
+const count = (n, word) => `${fmt(n)} ${word}${n === 1 ? '' : 's'}`;
 const day = (iso) => new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 
 // "Up 12", against the same stretch just before it (said once, under the tiles).
 function Change({ count, before }) {
   const diff = count - before;
-  if (!count && !before) return null;
+  if (before === null || (!count && !before)) return null;
   if (diff === 0) return <span className="text-xs text-brand-muted">Same</span>;
   return <span className={`text-xs font-semibold ${diff > 0 ? 'text-brand-success' : 'text-brand-muted'}`}>{diff > 0 ? 'Up' : 'Down'} {fmt(Math.abs(diff))}</span>;
 }
@@ -30,17 +37,18 @@ function Change({ count, before }) {
 function Bars({ buckets, field, label }) {
   const max = Math.max(1, ...buckets.map((b) => b[field]));
   const total = buckets.reduce((s, b) => s + b[field], 0);
-  const name = (b) => (b.days > 1 ? `Week of ${day(b.start)}` : day(b.start));
+  const unit = buckets[0]?.unit || 'day';
+  const name = (b) => (b.unit === 'month' ? new Date(b.start).toLocaleDateString(undefined, { month: 'short', year: 'numeric' }) : b.unit === 'week' ? `Week of ${day(b.start)}` : day(b.start));
   return <figure className="mt-4">
-    <div className="flex h-28 items-end gap-[2px] border-b border-brand-line" role="img" aria-label={`${label} by ${buckets[0]?.days > 1 ? 'week' : 'day'}: ${buckets.map((b) => `${name(b)} ${b[field]}`).join(', ')}`}>
+    <div className="flex h-28 items-end gap-[2px] border-b border-brand-line" role="img" aria-label={`${label} by ${unit}: ${buckets.map((b) => `${name(b)} ${b[field]}`).join(', ')}`}>
       {buckets.map((b) => <div key={b.start} className="group relative flex h-full min-w-0 flex-1 items-end" title={`${name(b)}: ${fmt(b[field])}`}>
         <div className="w-full rounded-t-[4px] bg-brand-teal transition-opacity group-hover:opacity-80" style={{ height: b[field] ? `${Math.max(4, (b[field] / max) * 100)}%` : '0' }}/>
         <span className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1 hidden -translate-x-1/2 whitespace-nowrap rounded-md bg-brand-ink px-2 py-1 text-xs font-semibold text-brand-canvas shadow group-hover:block">{name(b)}: {fmt(b[field])}</span>
       </div>)}
     </div>
     <figcaption className="mt-1.5 flex justify-between text-xs text-brand-muted">
-      <span>{day(buckets[0].start)}</span>
-      <span>{total ? `${fmt(max)} on the busiest ${buckets[0].days > 1 ? 'week' : 'day'}` : `No ${label.toLowerCase()} yet`}</span>
+      <span>{unit === 'month' ? name(buckets[0]) : day(buckets[0].start)}</span>
+      <span>{total ? `${fmt(max)} in the busiest ${unit}` : `No ${label.toLowerCase()} yet`}</span>
       <span>Today</span>
     </figcaption>
   </figure>;
@@ -63,16 +71,15 @@ export default function ProfileAnalytics() {
   }, [days]);
 
   const chartTile = TILES.find((t) => t.key === chart);
+  const shown = RANGES.find((r) => r.id === data?.days) || RANGES[1];
 
   return <section className="panel" aria-labelledby="analytics-title">
-    <div className="flex flex-wrap items-start justify-between gap-3">
-      <div>
-        <h2 id="analytics-title" className="section-title flex items-center gap-2"><BarChart3 size={20} className="text-brand-teal"/>Analytics</h2>
-        <p className="mt-0.5 flex items-center gap-1.5 text-sm text-brand-muted"><EyeOff size={14}/>Private to you</p>
-      </div>
-      <div className="flex rounded-full bg-brand-canvas p-1 ring-1 ring-brand-line" role="group" aria-label="Time range">
-        {RANGES.map((d) => <button key={d} type="button" onClick={() => setDays(d)} aria-pressed={days === d} className={`rounded-full px-3 py-1 text-xs font-semibold transition ${days === d ? 'bg-brand-navy text-white' : 'text-brand-body hover:text-brand-ink'}`}>{d} days</button>)}
-      </div>
+    <div>
+      <h2 id="analytics-title" className="section-title flex items-center gap-2"><BarChart3 size={20} className="text-brand-teal"/>Analytics</h2>
+      <p className="mt-0.5 flex items-center gap-1.5 text-sm text-brand-muted"><EyeOff size={14}/>Private to you</p>
+    </div>
+    <div className="mt-3 grid grid-cols-5 rounded-full bg-brand-canvas p-1 ring-1 ring-brand-line sm:inline-grid" role="group" aria-label="Time range">
+      {RANGES.map((r) => <button key={r.id} type="button" onClick={() => setDays(r.id)} aria-pressed={days === r.id} className={`whitespace-nowrap rounded-full px-1.5 py-1 text-xs font-semibold transition sm:px-3 ${days === r.id ? 'bg-brand-navy text-white' : 'text-brand-body hover:text-brand-ink'}`}>{r.label}</button>)}
     </div>
 
     {error && <p className="mt-4 text-sm text-brand-muted">Your analytics could not be loaded just now. Please try again in a moment.</p>}
@@ -95,17 +102,17 @@ export default function ProfileAnalytics() {
         })}
       </div>
 
-      <p className="mt-2 text-xs text-brand-muted">Up or down compared with the {data.days} days before. Tap Profile views or Post views to chart it.</p>
+      <p className="mt-2 text-xs text-brand-muted">{shown.before ? `Up or down compared with ${shown.before}. ` : ''}Tap Profile views or Post views to chart it.</p>
 
       <Bars buckets={data.buckets} field={chart} label={chartTile.label}/>
 
       {data.top_posts.length > 0 && <div className="mt-5">
-        <h3 className="text-sm font-bold text-brand-ink">Your top posts in the last {data.days} days</h3>
+        <h3 className="text-sm font-bold text-brand-ink">Your top posts {shown.id === 'all' ? 'of' : 'in'} {shown.span}</h3>
         <ul className="mt-2 divide-y divide-brand-line">
           {data.top_posts.map((p) => <li key={p.id} className="py-2.5">
             <a href={`/feed?post=${p.id}`} className="line-clamp-2 text-sm font-semibold text-brand-ink hover:text-brand-teal">{p.excerpt}</a>
             <p className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-brand-body">
-              <span>{fmt(p.impressions)} views</span><span>{fmt(p.reactions)} likes</span><span>{fmt(p.comments)} comments</span><span>{fmt(p.reposts)} reposts</span>
+              <span>{count(p.impressions, 'view')}</span><span>{count(p.reactions, 'like')}</span><span>{count(p.comments, 'comment')}</span><span>{count(p.reposts, 'repost')}</span>
             </p>
           </li>)}
         </ul>

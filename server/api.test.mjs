@@ -219,6 +219,10 @@ ok(an.data.totals.impressions.count >= 1 && an.data.buckets.length === 7 && an.d
 ok(!JSON.stringify(an.data).includes(idB), 'analytics never names a viewer');
 const an90 = await call('POST', '/functions/myAnalytics', { token: userA, body: { days: 90 } });
 ok(an90.data.days === 90 && an90.data.buckets.length >= 13 && an90.data.buckets.length <= 14, '90 days come in weekly bars', String(an90.data.buckets.length));
+const an365 = await call('POST', '/functions/myAnalytics', { token: userA, body: { days: 365 } });
+ok(an365.data.days === 365 && an365.data.buckets.every((b) => b.unit === 'month') && an365.data.buckets.length >= 12 && an365.data.buckets.length <= 13 && an365.data.totals.profile_views.count === 2, 'a year comes in monthly bars', JSON.stringify(an365.data.buckets.map((b) => b.start)));
+const anAll = await call('POST', '/functions/myAnalytics', { token: userA, body: { days: 'all' } });
+ok(anAll.data.days === 'all' && anAll.data.totals.profile_views.count === 2 && anAll.data.totals.profile_views.before === null && anAll.data.buckets.length >= 1, 'all time counts everything, with nothing to compare against', JSON.stringify(anAll.data.totals));
 const anB = await call('POST', '/functions/myAnalytics', { token: userB, body: { days: 30 } });
 ok(anB.data.totals.profile_views.count === 0, 'nobody else\'s views land in your box');
 const evs = await call('GET', '/entities/ActivityEvent', { token: userA });
