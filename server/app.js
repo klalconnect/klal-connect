@@ -473,7 +473,7 @@ app.post('/api/entities/:entity', requireAuth, async (req, res, next) => {
   // a photo belongs, and the listing page threw for every moderator who opened
   // it. The same shaping the PUT route applies, with the same 400 on refusal.
   if (entity === 'Provider') {
-    try { body = normalizeListingPatch(body, null, { badgeById: BADGE_BY_ID, badgeApplies: badgeAppliesTo, safeUrl: safeExternalUrl }); }
+    try { body = normalizeListingPatch(body, null, { badgeById: BADGE_BY_ID, badgeApplies: badgeAppliesTo, safeUrl: safeExternalUrl, user: req.user }); }
     catch (err) { return res.status(err.statusCode || 400).json({ error: err.message }); }
   }
   if (entity === 'Connection') {
@@ -559,7 +559,7 @@ app.put('/api/entities/:entity/:id', requireAuth, async (req, res, next) => {
     return res.status(403).json({ error: 'Only the business that owns this listing can change its payment link.' });
   }
   if (entity === 'Provider') {
-    try { patch = normalizeListingPatch(patch, existing, { badgeById: BADGE_BY_ID, badgeApplies: badgeAppliesTo, safeUrl: safeExternalUrl }); }
+    try { patch = normalizeListingPatch(patch, existing, { badgeById: BADGE_BY_ID, badgeApplies: badgeAppliesTo, safeUrl: safeExternalUrl, user: req.user }); }
     catch (err) { return res.status(err.statusCode || 400).json({ error: err.message }); }
     if ('latitude' in patch || 'longitude' in patch) {
       if (hasCoordinate(patch.latitude) && hasCoordinate(patch.longitude)) {

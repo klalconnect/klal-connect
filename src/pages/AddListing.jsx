@@ -75,7 +75,7 @@ export default function AddListing() {
         ? <div className="empty"><p>{editError.body}</p><div className="flex flex-wrap justify-center gap-2"><a href={`/provider/${encodeURIComponent(editId)}`} className="primary">Open the listing</a><Link to="/directory" className="secondary">Browse the directory</Link></div></div>
         : !editing
           ? <div className="loading">Loading the listing…</div>
-          : <section className="panel"><ListingForm provider={editing}/></section>}
+          : <section className="panel"><ListingForm provider={editing} ownerEdit={!staffEdit}/></section>}
     </div>;
   }
 
