@@ -6,6 +6,7 @@ import GuestPrompt from '@/components/GuestPrompt';
 import LocationPicker from '@/components/LocationPicker';
 import ChangePassword from '@/components/ChangePassword';
 import NotificationSettings from '@/components/NotificationSettings';
+import TranslationSettings from '@/components/TranslationSettings';
 import ManageListings from '@/components/ManageListings';
 import ManageCompanies from '@/components/ManageCompanies';
 
@@ -30,11 +31,12 @@ export default function Settings() {
     <Link to="/profile" className="mb-5 flex items-center gap-2 text-sm font-semibold text-brand-teal"><ArrowLeft size={17}/>Back to your profile</Link>
     <span className="eyebrow">YOUR ACCOUNT</span>
     <h1 className="title text-3xl">Settings</h1>
-    <p className="helper mb-4">Shabbos and Yom Tov times, notifications, your password, and the listings and company pages you manage. Signed in as {user.email}.</p>
+    <p className="helper mb-4">Shabbos and Yom Tov times, notifications, translation, your password, and the listings and company pages you manage. Signed in as {user.email}.</p>
 
     <div id="location" className="scroll-mt-24"><LocationPicker user={user}/></div>
     <div id="password" className="scroll-mt-24"><ChangePassword/></div>
     <div id="notifications" className="scroll-mt-24"><NotificationSettings user={user}/></div>
+    <div id="translation" className="scroll-mt-24"><TranslationSettings user={user}/></div>
     <div id="listings" className="scroll-mt-24"><ManageListings user={user}/></div>
     <div id="companies" className="scroll-mt-24"><ManageCompanies user={user}/></div>
 

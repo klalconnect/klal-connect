@@ -58,8 +58,8 @@ export default function FeedCommentList({ postId, user, authorId, isAsk, helpful
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2"><p className="text-xs font-semibold text-brand-ink">{c.author_name||'Community member'}</p>{c.created_date&&<time dateTime={c.created_date} title={fullDate(c.created_date)} className="text-[11px] text-brand-muted">{timeAgo(c.created_date)}</time>}{isHelpful&&<span className="inline-flex items-center gap-1 rounded-full bg-brand-surface px-2 py-0.5 text-[10px] font-bold text-brand-gold-ink"><CheckCircle2 size={11}/>Helped the asker</span>}</div>
         <Headline text={c.author_headline} className="text-[11px]"/>
-        <p className="text-sm leading-6 text-brand-body">{c.body}</p>
-        <TranslateToggle text={c.body} enabled={translate.enabled} languages={translate.languages}/>
+        <p dir="auto" className="text-sm leading-6 text-brand-body">{c.body}</p>
+        <TranslateToggle text={c.body} enabled={translate.enabled} languages={translate.languages} user={user}/>
         {/* The loop the directory runs on: someone asks, someone answers, and
             the answer becomes a listing the next person finds instead of an
             answer that scrolls away. Offered to anyone, not only the asker —
