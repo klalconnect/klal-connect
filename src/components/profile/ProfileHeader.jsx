@@ -13,6 +13,11 @@ import CityInput from '@/components/CityInput';
 import { WorkStatusRing, WorkStatusBadge, WorkStatusSelect } from '@/components/WorkStatus';
 import { topJob } from '@/lib/connections';
 
+// See-through, like LinkedIn's, so the cover shows behind the pencil. Inline
+// because the brand colours have no <alpha-value>: bg-brand-surface/50 is
+// never generated.
+const COVER_PENCIL = { background: 'hsl(var(--brand-surface) / 0.5)', boxShadow: '0 0 0 1px hsl(var(--brand-ink) / 0.12)' };
+
 const initialsOf = (user) => (user.full_name || user.email || '?').split(' ').map((x) => x[0]).slice(0, 2).join('').toUpperCase();
 
 // The top of a profile: cover, photo, name, headline, the facts, the actions.
@@ -80,10 +85,10 @@ export default function ProfileHeader({ user, me, editable, onSave, connections,
           pressing it used to delete the picture on the spot — which is what
           happened to the first person who tried it. Remove is in Edit intro,
           and asks first. */}
-      {/* A small round pencil in the corner, like LinkedIn's, so it hides as
-          little of the picture as possible. The words live in the tooltip
+      {/* A small see-through pencil in the corner, like LinkedIn's, so it
+          hides as little of the picture as possible. The words live in the tooltip
           and the screen-reader label. */}
-      {editable && <label className="absolute right-3 top-3 grid h-9 w-9 cursor-pointer place-items-center rounded-full bg-brand-surface text-brand-ink shadow-md ring-1 ring-brand-line hover:bg-brand-tint" title={user.banner_url ? 'Change cover photo' : 'Add a cover photo'} aria-label={user.banner_url ? 'Change cover photo' : 'Add a cover photo'} onClick={(e) => e.stopPropagation()}>{busy ? <Loader2 size={16} className="animate-spin"/> : <Pencil size={16}/>}<input type="file" accept="image/*" className="hidden" onChange={upload('banner_url')} disabled={busy}/></label>}
+      {editable && <label className="absolute right-3 top-3 grid h-9 w-9 cursor-pointer place-items-center rounded-full text-brand-ink shadow-sm backdrop-blur-sm transition hover:scale-105" style={COVER_PENCIL} title={user.banner_url ? 'Change cover photo' : 'Add a cover photo'} aria-label={user.banner_url ? 'Change cover photo' : 'Add a cover photo'} onClick={(e) => e.stopPropagation()}>{busy ? <Loader2 size={16} className="animate-spin"/> : <Pencil size={16}/>}<input type="file" accept="image/*" className="hidden" onChange={upload('banner_url')} disabled={busy}/></label>}
     </div>
     <div className="px-6 pb-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
