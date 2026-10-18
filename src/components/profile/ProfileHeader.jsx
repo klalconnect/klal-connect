@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '@/api/client';
 import { Image } from '@/components/ui/image';
-import { MapPin, Briefcase, Users, Pencil, Camera, Loader2, Settings, Phone, X } from 'lucide-react';
+import { MapPin, Briefcase, Users, Pencil, Camera, Loader2, Settings, Phone, X, CalendarDays } from 'lucide-react';
 import ConnectButton from '@/components/ConnectButton';
 import MessageButton from '@/components/MessageButton';
 import ShareButton from '@/components/ShareButton';
@@ -12,6 +12,7 @@ import { PROFILE_TYPES } from '@/lib/affiliations';
 import CityInput from '@/components/CityInput';
 import { WorkStatusRing, WorkStatusBadge, WorkStatusSelect } from '@/components/WorkStatus';
 import { topJob } from '@/lib/connections';
+import { BOOKING_LABELS, DEFAULT_BOOKING_LABEL, bookingLabel } from '@/lib/booking';
 
 const initialsOf = (user) => (user.full_name || user.email || '?').split(' ').map((x) => x[0]).slice(0, 2).join('').toUpperCase();
 
@@ -30,7 +31,7 @@ export default function ProfileHeader({ user, me, editable, onSave, connections,
   // checklist) and dropped whenever it closes, so no draft outlives a switch
   // to another section.
   React.useEffect(() => {
-    if (open) setForm({ full_name: user.full_name || '', headline: user.headline || '', profile_type: user.profile_type || 'community_member', home_city: user.home_city || '', phone: user.phone || '', work_status: user.work_status || '' });
+    if (open) setForm({ full_name: user.full_name || '', headline: user.headline || '', profile_type: user.profile_type || 'community_member', home_city: user.home_city || '', phone: user.phone || '', work_status: user.work_status || '', booking_url: user.booking_url || '', booking_label: bookingLabel(user) });
     else setForm(null);
     setErr('');
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -119,6 +120,8 @@ export default function ProfileHeader({ user, me, editable, onSave, connections,
             <label>General home city<CityInput value={form.home_city} onChange={(v) => setForm({ ...form, home_city: v })} onPick={(p) => setForm({ ...form, home_city: p.city })} placeholder="Lakewood, Brooklyn, Monsey…"/><span className="helper">Your exact location is never displayed.</span></label>
             <label>Phone<input className="field" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} inputMode="tel"/><span className="helper">Private. Only you and the admins can see it.</span></label>
             <label>Work status<WorkStatusSelect value={form.work_status} onChange={(v) => setForm({ ...form, work_status: v })}/><span className="helper">Shown as a badge on your profile, like LinkedIn.</span></label>
+            <label>Booking link<input className="field" value={form.booking_url} onChange={(e) => setForm({ ...form, booking_url: e.target.value })} inputMode="url" placeholder="calendly.com/your-name"/><span className="helper">Your Calendly, Acuity or other scheduling page. Adds a button to your profile. Leave blank for no button.</span></label>
+            <label>Button says<select className="field" value={form.booking_label || DEFAULT_BOOKING_LABEL} onChange={(e) => setForm({ ...form, booking_label: e.target.value })}>{BOOKING_LABELS.map((l) => <option key={l} value={l}>{l}</option>)}</select></label>
           </div>
           {user.avatar_url && <button type="button" disabled={busy} onClick={() => write({ avatar_url: '' }, 'Could not remove the photo')} className="text-sm font-semibold text-brand-error hover:underline">Remove profile photo</button>}
           {err && <p className="text-sm font-semibold text-brand-error">{err}</p>}
@@ -140,6 +143,9 @@ export default function ProfileHeader({ user, me, editable, onSave, connections,
             {connectionCount > 0 && <p className="flex items-start gap-2"><Users size={14} className="mt-1 shrink-0 text-brand-teal"/><span>{connectionCount} {connectionCount === 1 ? 'connection' : 'connections'}{mutual?.count > 0 && <span className="text-brand-muted"> · {mutual.count} mutual{mutual.names.length ? `: ${mutual.names.join(', ')}${mutual.count > mutual.names.length ? ` and ${mutual.count - mutual.names.length} more` : ''}` : ''}</span>}</span></p>}
             {user.invited_by_name && <p className="text-xs text-brand-muted">Invited to Klal by {user.invited_by_id ? <Link to={`/profile/${user.invited_by_id}`} className="font-semibold text-brand-teal hover:underline">{user.invited_by_name}</Link> : user.invited_by_name}</p>}
           </div>
+          {user.booking_url
+            ? <a href={user.booking_url} target="_blank" rel="noopener noreferrer" className="secondary mt-4 w-full rounded-full border-brand-teal/50 text-brand-teal"><CalendarDays size={16}/>{bookingLabel(user)}</a>
+            : editable && <button type="button" onClick={startEdit} className="mt-3 flex items-center gap-1.5 text-sm text-brand-muted hover:text-brand-teal hover:underline"><CalendarDays size={14}/>Add a "Book an appointment" button</button>}
           {err && <p className="mt-2 text-sm font-semibold text-brand-error">{err}</p>}
         </div>}
     </div>
