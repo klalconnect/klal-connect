@@ -68,7 +68,6 @@ export default function ProfileHeader({ user, me, editable, onSave, connections,
   const companyLink = job?.company ? companies[job.company.trim().toLowerCase()] : null;
   const typeLabel = PROFILE_TYPES.find((t) => t.id === user.profile_type)?.label;
   const profileUrl = `${window.location.origin}/profile/${user.id}`;
-  const overlay = 'inline-flex cursor-pointer items-center gap-1.5 rounded-full bg-brand-surface/90 px-3 py-1.5 text-xs font-semibold text-brand-ink shadow-sm ring-1 ring-brand-line backdrop-blur hover:bg-brand-surface';
 
   return <>
   <section id="intro" className="scroll-mt-24 overflow-hidden rounded-xl bg-brand-surface ring-1 ring-brand-line">
@@ -81,9 +80,10 @@ export default function ProfileHeader({ user, me, editable, onSave, connections,
           pressing it used to delete the picture on the spot — which is what
           happened to the first person who tried it. Remove is in Edit intro,
           and asks first. */}
-      {editable && <div className="absolute right-3 top-3 flex gap-2">
-        <label className={overlay} onClick={(e) => e.stopPropagation()}>{busy ? <Loader2 size={14} className="animate-spin"/> : <Camera size={14}/>}{user.banner_url ? 'Change cover' : 'Add a cover'}<input type="file" accept="image/*" className="hidden" onChange={upload('banner_url')} disabled={busy}/></label>
-      </div>}
+      {/* A small round pencil in the corner, like LinkedIn's, so it hides as
+          little of the picture as possible. The words live in the tooltip
+          and the screen-reader label. */}
+      {editable && <label className="absolute right-3 top-3 grid h-9 w-9 cursor-pointer place-items-center rounded-full bg-brand-surface text-brand-ink shadow-md ring-1 ring-brand-line hover:bg-brand-tint" title={user.banner_url ? 'Change cover photo' : 'Add a cover photo'} aria-label={user.banner_url ? 'Change cover photo' : 'Add a cover photo'} onClick={(e) => e.stopPropagation()}>{busy ? <Loader2 size={16} className="animate-spin"/> : <Pencil size={16}/>}<input type="file" accept="image/*" className="hidden" onChange={upload('banner_url')} disabled={busy}/></label>}
     </div>
     <div className="px-6 pb-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
