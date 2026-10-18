@@ -198,6 +198,9 @@ if (!LOCAL) {
         await send('Page.navigate', { url: `${BASE}/admin` });
         await sleep(4000);
         await ev(`[...document.querySelectorAll('button')].find((b) => b.textContent.trim().startsWith('Claim requests'))?.click()`);
+        // Queue rows are collapsed to one line; open them so the card is measured.
+        await sleep(300);
+        await ev(`[...document.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Expand all')?.click()`);
         await sleep(900);
         const text = (await ev('document.body.innerText')) || '';
         const rendered = text.includes('Filed by') || text.includes('Queue is clear');
