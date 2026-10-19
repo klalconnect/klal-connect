@@ -18,6 +18,7 @@ import { fillListingCountries } from './listing-countries.js';
 
 const KEY = 'categories_offered';
 const SHULS_MOVED = 'community_shuls_removed';
+const INSURANCE_SPLIT = 'insurance_own_category_2026_10_19';
 const slugify = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 
 let started = null;
@@ -61,6 +62,7 @@ async function run() {
   else if (marker.value !== list) await store.update('Setting', marker.id, { value: list });
   if (added.length) console.log(`[categories] added ${added.join(', ')}`);
   await dropShulsFromCommunity();
+  await splitOutInsurance();
   await fixListingTypes();
   await fillListingCountries();
   return added;
@@ -78,4 +80,41 @@ async function dropShulsFromCommunity() {
     if (kept.length !== c.subcategories.length) await store.update('Category', c.id, { subcategories: kept });
   }
   await store.create('Setting', { key: SHULS_MOVED, value: '1' });
+}
+
+// Insurance got its own category (and shuls their own icon) on 2026-10-19.
+// Like the shuls move above, a running directory keeps what it was created
+// with, so this takes "Insurance" out of Financial's subcategories, swaps the
+// shuls card off Financial's bank building onto a Torah scroll, and moves
+// shuls up to third on Resources (Eli asked), once. Recorded, so an admin who
+// changes any of it back is not overruled.
+async function splitOutInsurance() {
+  if ((await store.filter('Setting', { key: INSURANCE_SPLIT })).length) return;
+  for (const c of await store.list('Category')) {
+    const name = String(c.name || '').trim().toLowerCase();
+    if (name === 'financial' && Array.isArray(c.subcategories)) {
+      const kept = c.subcategories.filter((s) => String(s).trim().toLowerCase() !== 'insurance');
+      if (kept.length !== c.subcategories.length) await store.update('Category', c.id, { subcategories: kept });
+    }
+    if (name === 'shuls & minyanim' && (!c.icon || c.icon === 'Landmark' || c.icon === 'MoreHorizontal')) {
+      await store.update('Category', c.id, { icon: 'TorahScroll' });
+    }
+  }
+  await moveShulsToThird();
+  await store.create('Setting', { key: INSURANCE_SPLIT, value: '1' });
+}
+
+// Third, after Home Services and Business: everything from third down shifts
+// one place, so the admin list keeps whole numbers. Skipped if an admin has
+// already moved shuls into the top three.
+async function moveShulsToThird() {
+  const all = await store.list('Category');
+  const shuls = all.find((c) => String(c.name || '').trim().toLowerCase() === 'shuls & minyanim');
+  if (!shuls || Number(shuls.order) <= 3) return;
+  for (const c of all) {
+    if (c.id === shuls.id) continue;
+    const order = Number(c.order);
+    if (order >= 3 && order < 99) await store.update('Category', c.id, { order: order + 1 });
+  }
+  await store.update('Category', shuls.id, { order: 3 });
 }
