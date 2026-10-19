@@ -2,8 +2,9 @@ import {
   Home, BriefcaseBusiness, HeartPulse, Scale, Laptop, GraduationCap, Utensils, Users, Landmark,
   Gift, ShieldCheck, Droplets, BookOpen, Baby, Car, Scissors, Camera, Music, Wrench, Truck,
   Stethoscope, Shirt, Cake, Flower2, Building2, HandHeart, Plane, PawPrint, Dumbbell, Sparkles,
-  Store, Hammer, Paintbrush, KeyRound, Phone, MoreHorizontal,
+  Store, Hammer, Paintbrush, KeyRound, Phone, MoreHorizontal, Umbrella,
 } from 'lucide-react';
+import StarOfDavid from '@/components/icons/StarOfDavid';
 
 // Icons a category can carry. One registry, shared by the directory grid and
 // the admin picker, so a category added from the admin screen is not stuck
@@ -12,7 +13,7 @@ export const CATEGORY_ICONS = {
   Home, BriefcaseBusiness, HeartPulse, Scale, Laptop, GraduationCap, Utensils, Users, Landmark,
   Gift, ShieldCheck, Droplets, BookOpen, Baby, Car, Scissors, Camera, Music, Wrench, Truck,
   Stethoscope, Shirt, Cake, Flower2, Building2, HandHeart, Plane, PawPrint, Dumbbell, Sparkles,
-  Store, Hammer, Paintbrush, KeyRound, Phone, MoreHorizontal,
+  Store, Hammer, Paintbrush, KeyRound, Phone, MoreHorizontal, Umbrella, StarOfDavid,
 };
 
 export const iconFor = (name) => CATEGORY_ICONS[name] || MoreHorizontal;
@@ -23,7 +24,7 @@ export const ICON_NAMES = Object.keys(CATEGORY_ICONS);
 const GUESSES = [
   [/^home|home services|household/i, 'Home'],
   [/mikv|mikveh|bath/i, 'Droplets'],
-  [/shul|synagogue|beis medrash|minyan/i, 'Landmark'],
+  [/shul|synagogue|beis medrash|minyan/i, 'StarOfDavid'],
   [/school|yeshiv|cheder|tutor|educat|kollel|seminary/i, 'GraduationCap'],
   [/sefer|sefarim|book|judaica/i, 'BookOpen'],
   [/gemach|chesed|tzedak|charit/i, 'Gift'],
@@ -37,7 +38,8 @@ const GUESSES = [
   [/pharmac|clinic/i, 'Stethoscope'],
   [/babysit|childcare|daycare|playgroup|camp/i, 'Baby'],
   [/law|legal|attorney|advocate/i, 'Scale'],
-  [/account|bookkeep|financ|mortgage|insur|tax|loan/i, 'Landmark'],
+  [/insur/i, 'Umbrella'],
+  [/account|bookkeep|financ|mortgage|tax|loan/i, 'Landmark'],
   [/real estate|realty|apartment|rental|property/i, 'Building2'],
   [/car|auto|mechanic|driving|taxi|limo/i, 'Car'],
   [/mov(e|ing)|deliver|shipping|storage/i, 'Truck'],

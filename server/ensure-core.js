@@ -18,6 +18,7 @@ import { fillListingCountries } from './listing-countries.js';
 
 const KEY = 'categories_offered';
 const SHULS_MOVED = 'community_shuls_removed';
+const INSURANCE_SPLIT = 'insurance_own_category_2026_10_19';
 const slugify = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 
 let started = null;
@@ -61,6 +62,7 @@ async function run() {
   else if (marker.value !== list) await store.update('Setting', marker.id, { value: list });
   if (added.length) console.log(`[categories] added ${added.join(', ')}`);
   await dropShulsFromCommunity();
+  await splitOutInsurance();
   await fixListingTypes();
   await fillListingCountries();
   return added;
@@ -78,4 +80,24 @@ async function dropShulsFromCommunity() {
     if (kept.length !== c.subcategories.length) await store.update('Category', c.id, { subcategories: kept });
   }
   await store.create('Setting', { key: SHULS_MOVED, value: '1' });
+}
+
+// Insurance got its own category (and shuls their own icon) on 2026-10-19.
+// Like the shuls move above, a running directory keeps what it was created
+// with, so this takes "Insurance" out of Financial's subcategories and swaps
+// the shuls card off Financial's bank building, once. Recorded, so an admin
+// who changes either back is not overruled.
+async function splitOutInsurance() {
+  if ((await store.filter('Setting', { key: INSURANCE_SPLIT })).length) return;
+  for (const c of await store.list('Category')) {
+    const name = String(c.name || '').trim().toLowerCase();
+    if (name === 'financial' && Array.isArray(c.subcategories)) {
+      const kept = c.subcategories.filter((s) => String(s).trim().toLowerCase() !== 'insurance');
+      if (kept.length !== c.subcategories.length) await store.update('Category', c.id, { subcategories: kept });
+    }
+    if (name === 'shuls & minyanim' && (!c.icon || c.icon === 'Landmark' || c.icon === 'MoreHorizontal')) {
+      await store.update('Category', c.id, { icon: 'StarOfDavid' });
+    }
+  }
+  await store.create('Setting', { key: INSURANCE_SPLIT, value: '1' });
 }

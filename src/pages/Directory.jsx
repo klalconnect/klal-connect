@@ -39,7 +39,9 @@ export default function Directory(){
 
     <section>
       <div className="section-head"><div><span className="eyebrow">EXPLORE</span><h2 className="title">Popular categories</h2></div><Link to="/browse" className="text-sm font-semibold text-brand-teal">View all</Link></div>
-      <CategoryGrid categories={categories} limit={12}/>
+      {/* Every category but "Other". The first twelve left Shuls and Insurance
+          off the page, and "View all" is for listings, not headings. */}
+      <CategoryGrid categories={categories.filter(c=>c.name!=='Other')}/>
     </section>
 
     {/* These three rails were mislabelled against their own queries: the
