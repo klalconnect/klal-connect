@@ -1,5 +1,5 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
-import { Search, MapPin, LayoutGrid, Building2, User, Briefcase } from 'lucide-react';
+import { Search, MapPin, LayoutGrid, Building2, User, Briefcase, X } from 'lucide-react';
 
 // A text box that offers suggestions as you type, for every search on the
 // site. Callers decide what to suggest; this owns the list itself: keyboard
@@ -9,6 +9,9 @@ import { Search, MapPin, LayoutGrid, Building2, User, Briefcase } from 'lucide-r
 // suggest(text) returns the items to show right away, from what the page
 // already has. suggestMore(text), when given, is a slower lookup (the place
 // list on the server) that is debounced and added underneath.
+//
+// An X at the end of the box clears it in one tap, instead of deleting
+// letter by letter; it shows only when there is something to clear.
 //
 // An item is { label, group?, hint?, count?, kind? }. Picking one calls
 // onPick(item); the caller decides whether that fills the box, sets a filter
@@ -30,6 +33,7 @@ export default function SuggestInput({
   const [active, setActive] = useState(-1);
   const [more, setMore] = useState([]);
   const box = useRef(null);
+  const input = useRef(null);
   const latest = useRef(0);
   const listId = useId();
 
@@ -85,7 +89,8 @@ export default function SuggestInput({
   return (
     <div ref={box} className={`relative ${wrapperClassName}`}>
       <input
-        className={className}
+        ref={input}
+        className={`${className} pr-9`}
         value={value || ''}
         onChange={(e) => { onChange(e.target.value); setOpen(true); setActive(-1); }}
         onFocus={() => setOpen(true)}
@@ -99,6 +104,18 @@ export default function SuggestInput({
         aria-activedescendant={show && active >= 0 ? `${listId}-${active}` : undefined}
         {...rest}
       />
+      {value && (
+        <button
+          type="button"
+          aria-label="Clear"
+          // Keeps the keyboard up on a phone, ready for the next search.
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => { onChange(''); setActive(-1); input.current?.focus(); }}
+          className="absolute right-1.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-brand-muted hover:bg-brand-tint hover:text-brand-ink"
+        >
+          <X size={16} />
+        </button>
+      )}
       {show && (
         <ul id={listId} role="listbox" className="absolute left-0 right-0 z-40 mt-1 max-h-80 min-w-[16rem] overflow-y-auto rounded-xl border border-brand-line bg-brand-surface py-1 text-left shadow-lg">
           {items.map((item, i) => {

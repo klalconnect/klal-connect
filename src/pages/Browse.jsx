@@ -36,9 +36,6 @@ export default function Browse() {
   // means everywhere.
   const linkedPlace = params.has('location');
   const [place, setPlace] = useState(params.get('location') || (linkedPlace ? '' : readStoredCommunity()));
-  // A member's own city fills the Where box, visibly, only when nothing else
-  // chose a place. It used to apply silently behind a blank box.
-  const placeTouched = React.useRef(linkedPlace || Boolean(place));
   const [category, setCategory] = useState(params.get('category') || '');
   const [country, setCountry] = useState(params.get('country') || '');
   const lat = Number(params.get('lat')), lng = Number(params.get('lng'));
@@ -48,7 +45,6 @@ export default function Browse() {
   const [sort, setSort] = useState(located ? 'nearest' : 'used');
   const [verified, setVerified] = useState(false);
   const [view, setView] = useState('list');
-  const [homeCity, setHomeCity] = useState('');
 
   useEffect(() => {
     Promise.all([api.entities.Provider.filter({ status: 'published' }), api.entities.Category.list('order')])
@@ -56,18 +52,7 @@ export default function Browse() {
       .catch(() => {});
   }, []);
 
-  // "Nearest" with no coordinates used to mean "no results". The city from
-  // onboarding stands in for the device's location, so a member who never
-  // granted permission still gets their own community first.
-  useEffect(() => {
-    api.auth.hasAccount().then(async (ok) => {
-      if (!ok) return;
-      const me = await api.auth.me();
-      setHomeCity((me.home_city || me.city || '').trim());
-    }).catch(() => {});
-  }, []);
-  useEffect(() => { if (homeCity && !placeTouched.current) setPlace(homeCity); }, [homeCity]);
-  const choosePlace = (value) => { placeTouched.current = true; setPlace(value); };
+  const choosePlace = (value) => setPlace(value);
   // Picking a country lets go of a place that is not in it: "Israel" with
   // "Boca Raton" still in the Where box would find nothing.
   const chooseCountry = (value) => {

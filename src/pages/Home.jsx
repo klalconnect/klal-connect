@@ -52,7 +52,7 @@ export default function Home() {
   });
 
   const homeCity = String(me?.home_city || me?.city || '').trim();
-  const [community, setCommunity] = useCommunity(homeCity);
+  const [community, setCommunity, chosen] = useCommunity(homeCity);
 
   // What is available where they are. A listing that serves everywhere serves
   // here too — see @/lib/place, which is also what the search uses.
@@ -113,7 +113,9 @@ export default function Home() {
         <h2 className="mt-1 font-heading text-xl font-bold text-brand-ink sm:text-2xl">Use it as a resource too.</h2>
         <p className="mt-1 text-sm text-brand-body sm:text-base">Find a plumber, a gemach, a shul or a therapist from a directory of frum businesses and community resources.</p>
       </div>
-      <SearchPanel defaultLocation={community} />
+      {/* Only a place someone picked fills the Where box; their own city just
+          shapes the page below, so the search itself starts empty. */}
+      <SearchPanel defaultLocation={chosen ? community : ''} />
       <div className="flex flex-wrap items-center gap-2">
         {quickLinks.map(({ label, q, count }) => <Link
           key={q}
