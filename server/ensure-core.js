@@ -84,9 +84,10 @@ async function dropShulsFromCommunity() {
 
 // Insurance got its own category (and shuls their own icon) on 2026-10-19.
 // Like the shuls move above, a running directory keeps what it was created
-// with, so this takes "Insurance" out of Financial's subcategories and swaps
-// the shuls card off Financial's bank building onto a Torah scroll, once. Recorded, so an admin
-// who changes either back is not overruled.
+// with, so this takes "Insurance" out of Financial's subcategories, swaps the
+// shuls card off Financial's bank building onto a Torah scroll, and moves
+// shuls up to third on Resources (Eli asked), once. Recorded, so an admin who
+// changes any of it back is not overruled.
 async function splitOutInsurance() {
   if ((await store.filter('Setting', { key: INSURANCE_SPLIT })).length) return;
   for (const c of await store.list('Category')) {
@@ -99,5 +100,21 @@ async function splitOutInsurance() {
       await store.update('Category', c.id, { icon: 'TorahScroll' });
     }
   }
+  await moveShulsToThird();
   await store.create('Setting', { key: INSURANCE_SPLIT, value: '1' });
+}
+
+// Third, after Home Services and Business: everything from third down shifts
+// one place, so the admin list keeps whole numbers. Skipped if an admin has
+// already moved shuls into the top three.
+async function moveShulsToThird() {
+  const all = await store.list('Category');
+  const shuls = all.find((c) => String(c.name || '').trim().toLowerCase() === 'shuls & minyanim');
+  if (!shuls || Number(shuls.order) <= 3) return;
+  for (const c of all) {
+    if (c.id === shuls.id) continue;
+    const order = Number(c.order);
+    if (order >= 3 && order < 99) await store.update('Category', c.id, { order: order + 1 });
+  }
+  await store.update('Category', shuls.id, { order: 3 });
 }

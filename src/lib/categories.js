@@ -11,27 +11,27 @@
 export const DIRECTORY_CATEGORIES = [
   { name: 'Home Services',   icon: 'Home',            order: 1,  subcategories: ['Plumbing', 'Electrical', 'Cleaning', 'Handyman'] },
   { name: 'Business',        icon: 'BriefcaseBusiness', order: 2, subcategories: ['Accounting', 'Marketing', 'Bookkeeping'] },
-  { name: 'Health',          icon: 'HeartPulse',      order: 3,  subcategories: ['Pediatrics', 'Dentistry', 'Therapy'] },
-  { name: 'Legal',           icon: 'Scale',           order: 4,  subcategories: ['Immigration', 'Real Estate', 'Family Law'] },
-  { name: 'Technology',      icon: 'Laptop',          order: 5,  subcategories: ['IT Support', 'Web Development'] },
-  { name: 'Education',       icon: 'GraduationCap',   order: 6,  subcategories: ['Tutoring', 'Test Prep', 'Special Ed'] },
-  { name: 'Food & Catering', icon: 'Utensils',        order: 7,  subcategories: ['Catering', 'Bakery', 'Restaurants'] },
+  { name: 'Health',          icon: 'HeartPulse',      order: 4,  subcategories: ['Pediatrics', 'Dentistry', 'Therapy'] },
+  { name: 'Legal',           icon: 'Scale',           order: 5,  subcategories: ['Immigration', 'Real Estate', 'Family Law'] },
+  { name: 'Technology',      icon: 'Laptop',          order: 6,  subcategories: ['IT Support', 'Web Development'] },
+  { name: 'Education',       icon: 'GraduationCap',   order: 7,  subcategories: ['Tutoring', 'Test Prep', 'Special Ed'] },
+  { name: 'Food & Catering', icon: 'Utensils',        order: 8,  subcategories: ['Catering', 'Bakery', 'Restaurants'] },
   // Not Shuls: they have their own category below, and offering both sent
   // half the shuls one way and half the other.
-  { name: 'Community',       icon: 'Users',           order: 8,  subcategories: ['Schools', 'Youth'] },
+  { name: 'Community',       icon: 'Users',           order: 9,  subcategories: ['Schools', 'Youth'] },
   // Not Insurance: it has its own category below, for the same reason shuls do.
-  { name: 'Financial',       icon: 'Landmark',        order: 9,  subcategories: ['Mortgage', 'Tax'] },
-  { name: 'Gemachim',        icon: 'Gift',            order: 10, subcategories: ['Medical Equipment', 'Simcha', 'Baby'] },
-  { name: 'Simcha Services', icon: 'ShieldCheck',     order: 11, subcategories: ['Photography', 'Music', 'Flowers'] },
+  { name: 'Financial',       icon: 'Landmark',        order: 10, subcategories: ['Mortgage', 'Tax'] },
+  { name: 'Gemachim',        icon: 'Gift',            order: 11, subcategories: ['Medical Equipment', 'Simcha', 'Baby'] },
+  { name: 'Simcha Services', icon: 'ShieldCheck',     order: 12, subcategories: ['Photography', 'Music', 'Flowers'] },
   // Resources and contacts only — shadchanim and the shidduch organisations
   // people already use. Deliberately not profiles or matching: who is dating is
   // nobody else's business, which is also why @/lib/sensitivity treats anything
   // in here as private (no public "used this", no named vouches).
-  { name: 'Shidduchim',      icon: 'HandHeart',       order: 12, subcategories: ['Shadchanim', 'Shidduch organizations', 'Dating coaches'] },
+  { name: 'Shidduchim',      icon: 'HandHeart',       order: 13, subcategories: ['Shadchanim', 'Shidduch organizations', 'Dating coaches'] },
   // Shuls are one of the six things the homepage offers to search for, and had
   // no category of their own — only a subcategory of Community, which the
   // listing form never offers.
-  { name: 'Shuls & Minyanim', icon: 'TorahScroll',    order: 13, subcategories: ['Shuls', 'Minyanim', 'Botei Medrash'] },
+  { name: 'Shuls & Minyanim', icon: 'TorahScroll',    order: 3,  subcategories: ['Shuls', 'Minyanim', 'Botei Medrash'] },
   // Its own card on Resources (Eli asked, 2026-10-19). It was a subcategory of
   // Financial, where nobody browsing for an agent would look.
   { name: 'Insurance',       icon: 'Umbrella',        order: 14, subcategories: ['Health Insurance', 'Life Insurance', 'Home & Auto', 'Business Insurance'] },
