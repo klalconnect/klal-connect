@@ -4,7 +4,7 @@ import {
   Stethoscope, Shirt, Cake, Flower2, Building2, HandHeart, Plane, PawPrint, Dumbbell, Sparkles,
   Store, Hammer, Paintbrush, KeyRound, Phone, MoreHorizontal, Umbrella,
 } from 'lucide-react';
-import StarOfDavid from '@/components/icons/StarOfDavid';
+import TorahScroll from '@/components/icons/TorahScroll';
 
 // Icons a category can carry. One registry, shared by the directory grid and
 // the admin picker, so a category added from the admin screen is not stuck
@@ -13,7 +13,7 @@ export const CATEGORY_ICONS = {
   Home, BriefcaseBusiness, HeartPulse, Scale, Laptop, GraduationCap, Utensils, Users, Landmark,
   Gift, ShieldCheck, Droplets, BookOpen, Baby, Car, Scissors, Camera, Music, Wrench, Truck,
   Stethoscope, Shirt, Cake, Flower2, Building2, HandHeart, Plane, PawPrint, Dumbbell, Sparkles,
-  Store, Hammer, Paintbrush, KeyRound, Phone, MoreHorizontal, Umbrella, StarOfDavid,
+  Store, Hammer, Paintbrush, KeyRound, Phone, MoreHorizontal, Umbrella, TorahScroll,
 };
 
 export const iconFor = (name) => CATEGORY_ICONS[name] || MoreHorizontal;
@@ -24,7 +24,7 @@ export const ICON_NAMES = Object.keys(CATEGORY_ICONS);
 const GUESSES = [
   [/^home|home services|household/i, 'Home'],
   [/mikv|mikveh|bath/i, 'Droplets'],
-  [/shul|synagogue|beis medrash|minyan/i, 'StarOfDavid'],
+  [/shul|synagogue|beis medrash|minyan/i, 'TorahScroll'],
   [/school|yeshiv|cheder|tutor|educat|kollel|seminary/i, 'GraduationCap'],
   [/sefer|sefarim|book|judaica/i, 'BookOpen'],
   [/gemach|chesed|tzedak|charit/i, 'Gift'],

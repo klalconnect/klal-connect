@@ -85,7 +85,7 @@ async function dropShulsFromCommunity() {
 // Insurance got its own category (and shuls their own icon) on 2026-10-19.
 // Like the shuls move above, a running directory keeps what it was created
 // with, so this takes "Insurance" out of Financial's subcategories and swaps
-// the shuls card off Financial's bank building, once. Recorded, so an admin
+// the shuls card off Financial's bank building onto a Torah scroll, once. Recorded, so an admin
 // who changes either back is not overruled.
 async function splitOutInsurance() {
   if ((await store.filter('Setting', { key: INSURANCE_SPLIT })).length) return;
@@ -96,7 +96,7 @@ async function splitOutInsurance() {
       if (kept.length !== c.subcategories.length) await store.update('Category', c.id, { subcategories: kept });
     }
     if (name === 'shuls & minyanim' && (!c.icon || c.icon === 'Landmark' || c.icon === 'MoreHorizontal')) {
-      await store.update('Category', c.id, { icon: 'StarOfDavid' });
+      await store.update('Category', c.id, { icon: 'TorahScroll' });
     }
   }
   await store.create('Setting', { key: INSURANCE_SPLIT, value: '1' });

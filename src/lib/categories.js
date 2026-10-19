@@ -31,7 +31,7 @@ export const DIRECTORY_CATEGORIES = [
   // Shuls are one of the six things the homepage offers to search for, and had
   // no category of their own — only a subcategory of Community, which the
   // listing form never offers.
-  { name: 'Shuls & Minyanim', icon: 'StarOfDavid',    order: 13, subcategories: ['Shuls', 'Minyanim', 'Botei Medrash'] },
+  { name: 'Shuls & Minyanim', icon: 'TorahScroll',    order: 13, subcategories: ['Shuls', 'Minyanim', 'Botei Medrash'] },
   // Its own card on Resources (Eli asked, 2026-10-19). It was a subcategory of
   // Financial, where nobody browsing for an agent would look.
   { name: 'Insurance',       icon: 'Umbrella',        order: 14, subcategories: ['Health Insurance', 'Life Insurance', 'Home & Auto', 'Business Insurance'] },
