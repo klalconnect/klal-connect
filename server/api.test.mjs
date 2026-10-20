@@ -153,6 +153,44 @@ ok(r.status === 403 && r.data.guest, 'guest cannot react');
   ok([400, 423].includes(shab.status) && /Shabbos/.test(shab.data?.error || ''), 'a time on Shabbos is refused', `${sat.toISOString()} ${JSON.stringify(shab.data)}`);
 }
 
+// ---- new jobs: announced with a celebration, or on the profile only -------
+{
+  const made = await call('POST', '/functions/createPost', { token: userA, body: { body: 'Started at Ezra Accounting today', post_type: 'new_job', job_title: '  Office   manager ', job_company: 'Ezra Accounting', celebration: 'balloons' } });
+  const jp = made.data?.post;
+  ok(made.status === 200 && jp.post_type === 'new_job' && jp.job_title === 'Office manager' && jp.celebration === 'balloons' && /^\d{4}-\d{2}$/.test(jp.job_start), 'a new-job post keeps its role, start month and animation', JSON.stringify(made.data));
+  const me = async () => (await call('GET', '/auth/me', { token: userA })).data.work_experience || [];
+  const first = (await me())[0];
+  ok(first?.title === 'Office manager' && first.company === 'Ezra Accounting' && first.current === true, 'announcing it adds it to the profile, first and current', JSON.stringify(first));
+  await call('POST', '/functions/createPost', { token: userA, body: { body: 'again', post_type: 'new_job', job_title: 'office manager', job_company: 'ezra accounting' } });
+  ok((await me()).filter((j) => j.company.toLowerCase() === 'ezra accounting').length === 1, 'the same job is not listed twice');
+  const empty = await call('POST', '/functions/createPost', { token: userA, body: { post_type: 'new_job', job_title: 'Paralegal' } });
+  ok(empty.status === 200, 'a new-job post needs no words of its own', JSON.stringify(empty.data));
+  const odd = (await call('POST', '/functions/createPost', { token: userA, body: { post_type: 'new_job', job_title: 'x', celebration: 'constructor' } })).data.post;
+  ok(odd.celebration === 'confetti', 'an unknown animation falls back to confetti', JSON.stringify(odd));
+  const old = await call('POST', '/functions/createPost', { token: userA, body: { post_type: 'new_job', job_title: 'Teacher', job_start: '2019-09' } });
+  ok(old.status === 400, 'a job from before the site opened cannot be announced', JSON.stringify(old.data));
+  const nothing = await call('POST', '/functions/createPost', { token: userA, body: { post_type: 'new_job' } });
+  ok(nothing.status === 400, 'a new job needs a title or a company', String(nothing.status));
+  const future = await call('POST', '/functions/addNewJob', { token: userA, body: { job_title: 'Later', job_start: '2099-01' } });
+  ok(future.status === 400, 'a start month far ahead is refused', String(future.status));
+  const before = (await call('GET', '/entities/FeedPost', { token: userA })).data.length;
+  const quiet = await call('POST', '/functions/addNewJob', { token: userA, body: { job_title: 'Teacher', job_company: 'Yeshiva Ketana', job_start: '2019-09' } });
+  ok(quiet.status === 200 && quiet.data.user.work_experience[0].title === 'Teacher' && quiet.data.user.work_experience[0].start_date === '2019-09', 'a job can go on the profile only', JSON.stringify(quiet.data));
+  ok((await call('GET', '/entities/FeedPost', { token: userA })).data.length === before, 'and nothing is posted in the feed');
+  const plain = (await call('POST', '/functions/createPost', { token: userA, body: { body: 'x', post_type: 'post', job_title: 'CEO', celebration: 'fireworks' } })).data.post;
+  ok(!('job_title' in plain) && !('celebration' in plain), 'other posts carry no job', JSON.stringify(plain));
+  const long = await call('POST', '/functions/createPost', { token: userA, body: { post_type: 'new_job', job_title: 'x'.repeat(101) } });
+  ok(long.status === 400, 'a job title over 100 characters is refused', String(long.status));
+  const other = await call('POST', '/functions/setPostCelebration', { token: userB, body: { post_id: jp.id, celebration: 'fireworks' } });
+  ok(other.status === 403, 'only the author can change the animation', String(other.status));
+  const changed = await call('POST', '/functions/setPostCelebration', { token: userA, body: { post_id: jp.id, celebration: 'sparkles' } });
+  ok(changed.data.post.celebration === 'sparkles', 'the author can change the animation', JSON.stringify(changed.data));
+  const notJob = await call('POST', '/functions/setPostCelebration', { token: userA, body: { post_id: plain.id, celebration: 'sparkles' } });
+  ok(notJob.status === 400, 'a plain post has no animation to change', String(notJob.status));
+  const direct = await call('PUT', `/entities/FeedPost/${jp.id}`, { token: userA, body: { celebration: 'fireworks' } });
+  ok(direct.status === 403, 'the animation cannot be set around the checks', String(direct.status));
+}
+
 // ---- messages: read receipt + reaction -----------------------------------
 const emailC0 = `c0${Date.now()}@example.com`;
 const regC0 = await call('POST', '/auth/register', { body: { email: emailC0, password: 'password123' } });

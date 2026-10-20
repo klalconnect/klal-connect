@@ -227,3 +227,36 @@
   .admin-nav-active { @apply bg-brand-navy text-white; }
   .admin-nav.active { @apply bg-brand-navy text-white shadow-md; }
 }
+/* New-job celebrations (src/components/feed/Celebration.jsx). Each piece gets
+   its place, colour and timing from custom properties set where it is drawn;
+   the box it plays over needs `position: relative`. */
+.kc-burst { position: absolute; inset: 0; z-index: 20; overflow: hidden; pointer-events: none; border-radius: inherit; }
+.kc-burst > span { position: absolute; display: block; opacity: 0; animation-fill-mode: both; }
+.kc-confetti { left: var(--x); top: -4%; width: var(--w); height: calc(var(--w) * 1.6); border-radius: 1px; background: var(--c); animation: kc-confetti var(--d) cubic-bezier(.25,.6,.5,1) var(--delay) both; }
+@keyframes kc-confetti {
+  0% { top: -4%; opacity: 1; transform: translateX(0) rotate(0); }
+  85% { opacity: 1; }
+  100% { top: 104%; opacity: 0; transform: translateX(var(--dx)) rotate(var(--r)); }
+}
+.kc-balloon { left: var(--x); bottom: -70px; width: 28px; height: 34px; border-radius: 50% 50% 48% 48%; background: radial-gradient(circle at 32% 30%, rgba(255,255,255,.55), transparent 38%), var(--c); scale: var(--s); animation: kc-balloon var(--d) ease-in var(--delay) both; }
+.kc-balloon::after { content: ''; position: absolute; left: 50%; top: 100%; width: 1px; height: 30px; background: currentColor; color: hsl(var(--brand-muted)); opacity: .6; }
+@keyframes kc-balloon {
+  0% { bottom: -70px; opacity: 0; transform: translateX(0); }
+  10% { opacity: .95; }
+  50% { transform: translateX(var(--sway)); }
+  85% { opacity: .95; }
+  100% { bottom: 110%; opacity: 0; transform: translateX(0); }
+}
+.kc-spark { width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 50%; background: var(--c); box-shadow: 0 0 8px 1px var(--c); animation: kc-spark 1.6s cubic-bezier(.15,.7,.3,1) var(--delay) both; }
+@keyframes kc-spark {
+  0% { opacity: 1; transform: translate(0, 0) scale(1); }
+  70% { opacity: 1; }
+  100% { opacity: 0; transform: translate(var(--tx), calc(var(--ty) + 18px)) scale(.4); }
+}
+.kc-star { width: 18px; height: 18px; background: var(--c); clip-path: polygon(50% 0, 61% 39%, 100% 50%, 61% 61%, 50% 100%, 39% 61%, 0 50%, 39% 39%); animation: kc-star 1.4s ease-in-out var(--delay) both; }
+@keyframes kc-star {
+  0% { opacity: 0; transform: scale(0) rotate(0); }
+  50% { opacity: 1; transform: scale(var(--s)) rotate(90deg); }
+  100% { opacity: 0; transform: scale(0) rotate(180deg); }
+}
+@media (prefers-reduced-motion: reduce) { .kc-burst { display: none; } }
