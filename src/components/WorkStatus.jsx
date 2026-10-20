@@ -1,39 +1,33 @@
 import React from 'react';
+import { BriefcaseBusiness, UserPlus } from 'lucide-react';
 import { WORK_STATUSES, workStatusOf } from '@/lib/workStatus';
 
-// The ribbon's geometry, in a 100×100 box laid over the framed photo. The
-// band hugs the outer edge and its words run along it, centred low on the
-// left so the camera button (bottom right, on your own profile) stays clear.
-const CENTER = 135; // degrees, clockwise from 3 o'clock
-const OUTER = 50, INNER = 34, TEXT_R = 41.6, FONT = 7.2;
-const point = (r, deg) => {
-  const a = (deg * Math.PI) / 180;
-  return `${(50 + r * Math.cos(a)).toFixed(2)} ${(50 + r * Math.sin(a)).toFixed(2)}`;
-};
+const ICONS = { open_to_work: BriefcaseBusiness, hiring: UserPlus };
 
-function Ribbon({ status }) {
-  const text = status.label.toUpperCase();
-  // Long enough for the words, which decides how far round the band goes:
-  // about 5.6 units a letter at this size, plus a tapered end on each side.
-  const half = Math.min(76, ((text.length * 5.6) / TEXT_R) * (90 / Math.PI) + 4);
-  const band = `M ${point(OUTER, CENTER + half + 12)} A ${OUTER} ${OUTER} 0 0 0 ${point(OUTER, CENTER - half - 12)} L ${point(INNER, CENTER - half)} A ${INNER} ${INNER} 0 0 1 ${point(INNER, CENTER + half)} Z`;
-  const id = `ribbon${React.useId().replace(/:/g, '')}`;
+// The frame fades from the full colour at the bottom, where the tag sits, to
+// a light tint over the top, so it reads as a glow round the photo rather
+// than a heavy border. Eight-digit hex: the last two are the opacity.
+const frame = (c) => `conic-gradient(from 0deg, ${c}40, ${c} 130deg, ${c} 230deg, ${c}40)`;
+
+// The see-through tag on the photo: frosted and faintly tinted, so the
+// picture shows softly through it, with the status in its colour. Inline because the brand
+// colours have no <alpha-value>: bg-brand-surface/80 is never generated.
+const GLASS = { background: 'hsl(var(--brand-surface) / 0.78)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' };
+
+function Tag({ status }) {
+  const Icon = ICONS[status.id];
   return (
-    <svg viewBox="0 0 100 100" className="pointer-events-none absolute inset-0 h-full w-full" aria-hidden="true">
-      <path d={band} fill={status.color}/>
-      <path id={id} d={`M ${point(TEXT_R, CENTER + half + 6)} A ${TEXT_R} ${TEXT_R} 0 0 0 ${point(TEXT_R, CENTER - half - 6)}`} fill="none"/>
-      <text fill="#fff" fontSize={FONT} fontWeight="800" letterSpacing="0.5" style={{ fontFamily: 'ui-sans-serif, system-ui, sans-serif' }}>
-        <textPath href={`#${id}`} startOffset="50%" textAnchor="middle" dominantBaseline="central">{text}</textPath>
-      </text>
-    </svg>
+    <span className={`pointer-events-none absolute -bottom-2.5 left-1/2 inline-flex -translate-x-1/2 items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1 text-[11.5px] font-bold leading-none tracking-wide shadow-sm ${status.text}`} style={{ ...GLASS, background: `linear-gradient(${status.color}1a, ${status.color}1a), ${GLASS.background}`, boxShadow: `0 0 0 1px ${status.color}55, 0 2px 6px rgb(0 0 0 / 0.12)` }}>
+      {Icon && <Icon size={12} strokeWidth={2.5} aria-hidden="true"/>}{status.label}
+    </span>
   );
 }
 
-// A coloured frame around an avatar, with the status written along it like
-// LinkedIn's. Renders its children untouched when the member has no status,
-// so callers can wrap an avatar unconditionally. `ribbon={false}` keeps just
-// the frame, for photos too small for the words to be read (the name's pill
-// says it there instead).
+// A coloured frame around an avatar, with a frosted tag on the photo saying
+// what it means, our own take on LinkedIn's. Renders its children untouched
+// when the member has no status, so callers can wrap an avatar
+// unconditionally. `ribbon={false}` keeps just the frame, for photos too
+// small for a tag (the name's pill says it there instead).
 // Thicker than it looks like it should need to be: avatars already carry a
 // 5px box-shadow edge (PHOTO_EDGE) to separate them from whatever they sit
 // on, and a box-shadow paints outside the element regardless of a wrapper's
@@ -45,9 +39,9 @@ export function WorkStatusRing({ user, thickness = 8, ribbon = true, className =
   // whatever non-flex parent it lands in (a card, a link), turning a ring
   // into a full-width pill the moment rounded-full meets a non-square box.
   return (
-    <div className={`relative inline-block rounded-full align-top ${className}`} style={{ padding: thickness, background: status.color }} title={status.label}>
+    <div className={`relative inline-block rounded-full align-top ${className}`} style={{ padding: thickness, background: frame(status.color) }} title={status.label}>
       {children}
-      {ribbon && <Ribbon status={status}/>}
+      {ribbon && <Tag status={status}/>}
     </div>
   );
 }
