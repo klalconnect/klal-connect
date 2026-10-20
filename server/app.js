@@ -22,6 +22,7 @@ import { verificationAfterEdit, pinAfterEdit, hasCoordinate } from '../src/lib/t
 import { isValidTimeZone } from './shabbos.js';
 import { isScheduled, byPostedAtDesc } from '../src/lib/scheduledPosts.js';
 import { BOOKING_LABELS, DEFAULT_BOOKING_LABEL, withScheme } from '../src/lib/booking.js';
+import { WORK_STATUS_IDS } from '../src/lib/workStatus.js';
 import { isDemoMode } from './db.js';
 import { ensureDemoData } from './demo-seed.js';
 import { ensureCoreCategories } from './ensure-core.js';
@@ -222,7 +223,20 @@ function present(entity, row, user) {
 }
 
 async function readable(entity, rows, user) {
-  return (await visibleRows(entity, rows, user)).map((row) => present(entity, row, user));
+  const out = (await visibleRows(entity, rows, user)).map((row) => present(entity, row, user));
+  return entity === 'FeedPost' ? withAuthorRibbons(out) : out;
+}
+
+// A post shows its author's photo ribbon (Hiring, Open to work…) as it is
+// now, not as it was when they posted: turning "Open to work" off takes it
+// off every old post too. So it is looked up on the way out, never stored.
+async function withAuthorRibbons(rows) {
+  if (!rows.length) return rows;
+  const byId = new Map((await users.all()).map((row) => [row.id, row.data?.work_status]));
+  return rows.map((row) => {
+    const status = row.created_by !== GUEST_EMAIL && byId.get(row.created_by_id);
+    return WORK_STATUS_IDS.includes(status) ? { ...row, author_work_status: status } : row;
+  });
 }
 
 // The guest's id, looked up once per process. Null where there is no guest.
@@ -862,6 +876,8 @@ app.put('/api/auth/me', requireAuth, async (req, res, next) => {
     catch (err) { return res.status(err.statusCode || 400).json({ error: err.message }); }
   }
   if ('booking_label' in safe && !BOOKING_LABELS.includes(safe.booking_label)) safe.booking_label = DEFAULT_BOOKING_LABEL;
+  // The photo ribbon is one of the fixed designs, or none.
+  if ('work_status' in safe && !WORK_STATUS_IDS.includes(safe.work_status)) safe.work_status = '';
   res.json(userToPublic(await users.update(req.user.id, safe)));
 });
 
