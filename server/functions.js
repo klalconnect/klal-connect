@@ -17,7 +17,7 @@ import { canEditListing, canSetPaymentLink, normalizeGallery, normalizeLogoUrl }
 import { REACTION_BY_ID, DEFAULT_REACTION, reactionOf } from '../src/lib/reactions.js';
 import { POST_REPORT_REASON_BY_ID, postExcerpt } from '../src/lib/postTypes.js';
 import { isScheduled, MAX_SCHEDULE_DAYS } from '../src/lib/scheduledPosts.js';
-import { celebrationOf, JOB_FIELD_MAX } from '../src/lib/celebrations.js';
+import { celebrationOf, thisMonth, canAnnounce, JOB_FIELD_MAX } from '../src/lib/celebrations.js';
 
 const BADGE_BY_ID = Object.fromEntries(BADGES.map((b) => [b.id, b]));
 
@@ -54,21 +54,33 @@ const POST_TYPES = new Set(['post', 'question', 'insight', 'promotion', 'new_job
 const EMPLOYMENT_TYPES = new Set(['full_time', 'part_time', 'contract', 'seasonal', 'volunteer']);
 const postType = (value) => (value === 'update' ? 'post' : POST_TYPES.has(value) ? value : 'post');
 
-// What a new-job post carries besides its words: the role, where, which
-// animation it plays, and whether it celebrates in public. Other kinds of
-// post carry none of it.
-function newJobFields({ job_title, job_company, celebration, celebration_public }) {
+// A new job as the member typed it: the role, where, and the month it
+// started ("2026-10"). A title or a company is needed; the month defaults to
+// this one.
+function newJobInput({ job_title, job_company, job_start }) {
   const field = (value, what) => {
     const text = String(value || '').replace(/\s+/g, ' ').trim();
     if (text.length > JOB_FIELD_MAX) fail(`${what} must be ${JOB_FIELD_MAX} characters or fewer.`);
     return text;
   };
-  return {
-    job_title: field(job_title, 'The job title'),
-    job_company: field(job_company, 'The company name'),
-    celebration: celebrationOf(celebration),
-    celebration_public: celebration_public !== false,
-  };
+  const title = field(job_title, 'The job title'), company = field(job_company, 'The company name');
+  if (!title && !company) fail('Add your job title or the company.');
+  let start = String(job_start || '').trim() || thisMonth();
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(start)) fail('Pick the month you started.');
+  if (start > thisMonth(new Date(Date.now() + 31 * 86_400_000))) fail('Pick a month that has already started, or this one.');
+  return { title, company, start };
+}
+
+// A new job goes onto the member's own profile, first in their experience and
+// marked current. Adding the same role at the same company again changes
+// nothing, so announcing a job already on the profile does not list it twice.
+async function addJobToProfile(user, { title, company, start }) {
+  const fresh = await users.byId(user.id);
+  const list = Array.isArray(fresh?.work_experience) ? fresh.work_experience : [];
+  const same = (j) => String(j.title || '').toLowerCase() === title.toLowerCase() && String(j.company || '').toLowerCase() === company.toLowerCase();
+  if (list.some(same)) return userToPublic(fresh);
+  const job = { title, company, location: '', start_date: start, end_date: '', current: true, description: '' };
+  return userToPublic(await users.update(user.id, { work_experience: [job, ...list] }));
 }
 
 // A post somebody may act on: there, and already live. A scheduled post is
@@ -576,19 +588,22 @@ export const functions = {
 
   // ---- feed -----------------------------------------------------------------
 
-  async createPost({ body, post_type, image_urls, publish_at, job_title, job_company, celebration, celebration_public }, user) {
+  async createPost({ body, post_type, image_urls, publish_at, job_title, job_company, job_start, celebration }, user) {
     await assertWritable(user);
     const text = String(body || '').trim();
-    if (!text && !(image_urls || []).length) fail('Write something to post.');
+    const kind = postType(post_type);
+    // A new-job post says what it is on its card, so its words are optional.
+    const job = kind === 'new_job' ? newJobInput({ job_title, job_company, job_start }) : null;
+    if (job && !canAnnounce(job.start)) fail('Only jobs that started since Klal Connect opened can be announced. Add this one to your profile instead.');
+    if (!text && !(image_urls || []).length && !job) fail('Write something to post.');
     if (text.length > 5000) fail('Posts must be 5000 characters or fewer.');
     const when = await scheduleTime(publish_at, user);
-    const kind = postType(post_type);
     const post = await store.create(
       'FeedPost',
       {
         body: text,
         post_type: kind,
-        ...(kind === 'new_job' ? newJobFields({ job_title, job_company, celebration, celebration_public }) : {}),
+        ...(job ? { job_title: job.title, job_company: job.company, job_start: job.start, celebration: celebrationOf(celebration) } : {}),
         image_urls: image_urls || [],
         ...(when ? { publish_at: when } : {}),
         like_count: 0,
@@ -598,7 +613,15 @@ export const functions = {
       },
       user
     );
+    if (job) await addJobToProfile(user, job);
     return { post };
+  },
+
+  // A new job added to the member's profile without announcing it: nothing
+  // goes in the feed.
+  async addNewJob({ job_title, job_company, job_start }, user) {
+    await assertWritable(user);
+    return { user: await addJobToProfile(user, newJobInput({ job_title, job_company, job_start })) };
   },
 
   // The author changing a post that has not gone live yet: its words, its
@@ -626,20 +649,16 @@ export const functions = {
     return { post: await store.update('FeedPost', post_id, patch) };
   },
 
-  // The author of a new-job post showing its celebration to everyone, keeping
-  // it quiet (it then reads as a plain update), or picking another animation.
-  // Any time, before or after it goes live.
-  async setPostCelebration({ post_id, celebration_public, celebration }, user) {
+  // The author of a new-job post picking another animation for it, before or
+  // after it goes live.
+  async setPostCelebration({ post_id, celebration }, user) {
     await assertWritable(user);
     need(post_id, 'Missing post.');
     const post = await store.get('FeedPost', post_id);
     if (!post) fail('Post not found.', 404);
     if (post.created_by_id !== user.id) fail('You can only change your own posts.', 403);
     if (post.post_type !== 'new_job') fail('Only a new-job post has a celebration.');
-    const patch = {};
-    if (celebration_public !== undefined) patch.celebration_public = celebration_public !== false;
-    if (celebration !== undefined) patch.celebration = celebrationOf(celebration);
-    return { post: await store.update('FeedPost', post_id, patch) };
+    return { post: await store.update('FeedPost', post_id, { celebration: celebrationOf(celebration) }) };
   },
 
   // Sharing someone's post into the feed, with or without a few words of your

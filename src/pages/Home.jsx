@@ -13,7 +13,7 @@ import { servesPlace, communitiesFrom } from '@/lib/place';
 import { useCommunity } from '@/lib/community';
 import { useShabbosStatus } from '@/hooks/useShabbosStatus';
 import { timeInZone, timeAgo } from '@/lib/time';
-import { POST_TYPE_BY_ID, BADGE_TONES, shownPostType } from '@/lib/postTypes';
+import { POST_TYPE_BY_ID, BADGE_TONES, normalizePostType } from '@/lib/postTypes';
 import { categoryLabel } from '@/lib/categories';
 
 // The words people actually use, as searches rather than category filters —
@@ -208,7 +208,7 @@ function FeedPreview() {
     {!isLoading && posts.length === 0 && <div className="empty"><p>Be the first to post to the Klal feed.</p><Link to="/feed" className="primary"><PenSquare size={16} />Write a post</Link></div>}
     <div className="space-y-3">
       {posts.slice(0, 3).map((p) => {
-        const type = POST_TYPE_BY_ID[shownPostType(p)];
+        const type = POST_TYPE_BY_ID[normalizePostType(p.post_type)];
         return <Link key={p.id} to={`/feed?post=${encodeURIComponent(p.id)}`} className="block rounded-xl bg-brand-surface p-4 ring-1 ring-brand-line transition hover:ring-brand-teal/50">
           <div className="flex items-start gap-3">
             <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-brand-tint font-bold text-brand-teal">{(p.author_name || '?').trim().charAt(0).toUpperCase()}</span>

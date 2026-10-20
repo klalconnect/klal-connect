@@ -77,8 +77,9 @@ export function CelebrationChoice({ value, onChange }){
   </div>;
 }
 
-// Everyone, or kept quiet: the choice the poster makes about the celebration.
-export function CelebrationVisibility({ value, onChange }){
-  const opt=(on,label)=><button type="button" role="radio" aria-checked={value===on} onClick={()=>onChange(on)} className={`flex-1 rounded-lg px-3 py-1.5 text-xs font-semibold transition sm:flex-none ${value===on?'bg-brand-surface text-brand-ink shadow-sm ring-1 ring-brand-line':'text-brand-body hover:text-brand-ink'}`}>{label}</button>;
-  return <div role="radiogroup" aria-label="Who sees the celebration" className="flex gap-1 rounded-lg bg-brand-canvas p-1 ring-1 ring-brand-line">{opt(true,'Celebrate publicly')}{opt(false,'Keep it quiet')}</div>;
+// Announced in the feed with its animation, or only added to the profile.
+// There is no announcing it without the celebration.
+export function AnnounceChoice({ value, onChange, canAnnounce=true }){
+  const opt=(on,label)=><button type="button" role="radio" aria-checked={value===on} disabled={on&&!canAnnounce} onClick={()=>onChange(on)} className={`flex-1 rounded-lg px-3 py-1.5 text-xs font-semibold transition disabled:opacity-40 ${value===on?'bg-brand-surface text-brand-ink shadow-sm ring-1 ring-brand-line':'text-brand-body hover:text-brand-ink'}`}>{label}</button>;
+  return <div role="radiogroup" aria-label="Announce it or not" className="flex gap-1 rounded-lg bg-brand-canvas p-1 ring-1 ring-brand-line">{opt(true,'🎉 Announce it')}{opt(false,'Just add it to my profile')}</div>;
 }
