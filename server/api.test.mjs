@@ -153,6 +153,29 @@ ok(r.status === 403 && r.data.guest, 'guest cannot react');
   ok([400, 423].includes(shab.status) && /Shabbos/.test(shab.data?.error || ''), 'a time on Shabbos is refused', `${sat.toISOString()} ${JSON.stringify(shab.data)}`);
 }
 
+// ---- new-job posts: a celebration the author can keep quiet ---------------
+{
+  const made = await call('POST', '/functions/createPost', { token: userA, body: { body: 'Started at Ezra Accounting today', post_type: 'new_job', job_title: '  Office   manager ', job_company: 'Ezra Accounting', celebration: 'balloons' } });
+  const jp = made.data?.post;
+  ok(made.status === 200 && jp.post_type === 'new_job' && jp.job_title === 'Office manager' && jp.celebration === 'balloons' && jp.celebration_public === true, 'a new-job post keeps its role and animation, public by default', JSON.stringify(made.data));
+  const odd = (await call('POST', '/functions/createPost', { token: userA, body: { body: 'x', post_type: 'new_job', celebration: 'constructor', celebration_public: false } })).data.post;
+  ok(odd.celebration === 'confetti' && odd.celebration_public === false, 'an unknown animation falls back to confetti, and quiet is kept', JSON.stringify(odd));
+  const plain = (await call('POST', '/functions/createPost', { token: userA, body: { body: 'x', post_type: 'post', job_title: 'CEO', celebration: 'fireworks' } })).data.post;
+  ok(!('job_title' in plain) && !('celebration' in plain), 'other posts carry no celebration', JSON.stringify(plain));
+  const long = await call('POST', '/functions/createPost', { token: userA, body: { body: 'x', post_type: 'new_job', job_title: 'x'.repeat(101) } });
+  ok(long.status === 400, 'a job title over 100 characters is refused', String(long.status));
+  const other = await call('POST', '/functions/setPostCelebration', { token: userB, body: { post_id: jp.id, celebration_public: false } });
+  ok(other.status === 403, 'only the author can hide the celebration', String(other.status));
+  const quiet = await call('POST', '/functions/setPostCelebration', { token: userA, body: { post_id: jp.id, celebration_public: false } });
+  ok(quiet.status === 200 && quiet.data.post.celebration_public === false && quiet.data.post.celebration === 'balloons', 'the author can keep it quiet', JSON.stringify(quiet.data));
+  const back = await call('POST', '/functions/setPostCelebration', { token: userA, body: { post_id: jp.id, celebration_public: true, celebration: 'sparkles' } });
+  ok(back.data.post.celebration_public === true && back.data.post.celebration === 'sparkles', 'and bring it back with another animation', JSON.stringify(back.data));
+  const notJob = await call('POST', '/functions/setPostCelebration', { token: userA, body: { post_id: plain.id, celebration_public: true } });
+  ok(notJob.status === 400, 'a plain post has no celebration to change', String(notJob.status));
+  const direct = await call('PUT', `/entities/FeedPost/${jp.id}`, { token: userA, body: { celebration_public: false } });
+  ok(direct.status === 403, 'the celebration cannot be set around the checks', String(direct.status));
+}
+
 // ---- messages: read receipt + reaction -----------------------------------
 const emailC0 = `c0${Date.now()}@example.com`;
 const regC0 = await call('POST', '/auth/register', { body: { email: emailC0, password: 'password123' } });

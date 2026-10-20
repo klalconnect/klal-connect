@@ -7,6 +7,8 @@ import { POST_TYPES, POST_TYPE_BY_ID } from '@/lib/postTypes';
 import { markEngaged } from '@/lib/engagement';
 import { LinkedInShareDialog, LI_BLUE } from '@/components/feed/FeedShare';
 import { isScheduled, scheduleLabel, toLocalInput } from '@/lib/scheduledPosts';
+import { DEFAULT_CELEBRATION, JOB_FIELD_MAX } from '@/lib/celebrations';
+import { CelebrationBurst, CelebrationChoice, CelebrationVisibility } from '@/components/feed/Celebration';
 
 // Where the time box starts when scheduling is opened: tomorrow at 9 AM, or
 // Sunday when tomorrow is Shabbos.
@@ -25,6 +27,10 @@ export default function FeedComposer({ onPosted, user, initialBody = '', initial
   // A time to go live instead of now, picked in the poster's own time zone.
   // Empty while posting straight away.
   const [when,setWhen]=useState('');
+  // A new-job post: the role, where, which animation it plays, whether it
+  // celebrates in public, and a count that plays a preview when it changes.
+  const [job,setJob]=useState({title:'',company:''}),[celebration,setCelebration]=useState(DEFAULT_CELEBRATION),[celebratePublic,setCelebratePublic]=useState(true),[preview,setPreview]=useState(0);
+  const newJob=type==='new_job';
   const [open,setOpen]=useState(()=>!!initialBody||typeof window==='undefined'||window.innerWidth>=640);
   const upload=async e=>{
     setUploading(true);
@@ -40,10 +46,11 @@ export default function FeedComposer({ onPosted, user, initialBody = '', initial
     const publish_at=when?new Date(when).toISOString():undefined;
     if(when&&Number.isNaN(new Date(when).getTime())){ setErr('Pick a date and time for your post.'); return; }
     setBusy(true);
-    const r=await api.functions.invoke('createPost',{body,post_type:type,image_urls:imgs,publish_at});
+    const jobFields=newJob?{job_title:job.title,job_company:job.company,celebration,celebration_public:celebratePublic}:{};
+    const r=await api.functions.invoke('createPost',{body,post_type:type,image_urls:imgs,publish_at,...jobFields});
     if(r.status>=400){ setErr(r.data?.error||'Could not post'); setBusy(false); return; }
     markEngaged();
-    setErr(''); setBody(''); setImgs([]); setWhen(''); setBusy(false); setPosted(r.data?.post||null);
+    setErr(''); setBody(''); setImgs([]); setWhen(''); setJob({title:'',company:''}); setCelebration(DEFAULT_CELEBRATION); setCelebratePublic(true); setBusy(false); setPosted(r.data?.post||null);
     if(window.innerWidth<640) setOpen(false);
     onPosted?.();
   };
@@ -85,6 +92,20 @@ export default function FeedComposer({ onPosted, user, initialBody = '', initial
         <textarea value={body} onChange={e=>setBody(e.target.value)} placeholder={POST_TYPE_BY_ID[type]?.placeholder} autoFocus className="min-h-16 w-full resize-none rounded-lg border border-brand-line bg-brand-canvas px-4 py-3 text-sm outline-none focus:border-[#0D6B66] sm:min-h-20"/>
       </div>
     </div>
+    {newJob&&<div className="relative space-y-3 overflow-hidden rounded-lg bg-brand-tint p-3 sm:ml-14">
+      {preview>0&&<CelebrationBurst key={preview} kind={celebration} seed={preview}/>}
+      <div className="grid gap-2 sm:grid-cols-2">
+        <label className="block min-w-0"><span className="mb-1 block text-xs font-semibold text-brand-ink">Job title</span><input value={job.title} onChange={e=>setJob(j=>({...j,title:e.target.value}))} maxLength={JOB_FIELD_MAX} placeholder="e.g. Office manager" className="w-full min-w-0 rounded-lg border border-brand-line bg-brand-canvas px-3 py-2 text-sm text-brand-ink outline-none focus:border-[#0D6B66]"/></label>
+        <label className="block min-w-0"><span className="mb-1 block text-xs font-semibold text-brand-ink">Company</span><input value={job.company} onChange={e=>setJob(j=>({...j,company:e.target.value}))} maxLength={JOB_FIELD_MAX} placeholder="e.g. Ezra Accounting" className="w-full min-w-0 rounded-lg border border-brand-line bg-brand-canvas px-3 py-2 text-sm text-brand-ink outline-none focus:border-[#0D6B66]"/></label>
+      </div>
+      <div className="space-y-1.5">
+        <p className="text-xs font-semibold text-brand-ink">Celebration</p>
+        <CelebrationVisibility value={celebratePublic} onChange={setCelebratePublic}/>
+        {celebratePublic
+          ?<><CelebrationChoice value={celebration} onChange={c=>{ setCelebration(c); setPreview(n=>n+1); }}/><p className="text-xs text-brand-muted">Everyone sees a "Started a new position" card, and it plays when they scroll to it. Tap one to see it.</p></>
+          :<p className="text-xs text-brand-muted">Your post goes out as a regular update, with no card or animation. You can turn the celebration on later from the post's ••• menu.</p>}
+      </div>
+    </div>}
     {when&&<div className="space-y-1.5 rounded-lg bg-brand-tint p-3 sm:ml-14">
       <div className="flex flex-wrap items-center gap-2">
         <label htmlFor="feed-schedule" className="text-sm font-semibold text-brand-ink">Goes live</label>

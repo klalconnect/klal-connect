@@ -1,6 +1,7 @@
 import React,{useEffect,useRef,useState} from 'react';
 import { api } from '@/api/client';
-import { MoreHorizontal, Link2, MessageCircle, Bookmark, BookmarkCheck, Flag, Trash2, Loader2 } from 'lucide-react';
+import { MoreHorizontal, Link2, MessageCircle, Bookmark, BookmarkCheck, Flag, Trash2, Loader2, PartyPopper, EyeOff, Sparkles } from 'lucide-react';
+import { celebrates, isNewJob } from '@/lib/celebrations';
 import { waShareUrl, WA_GREEN } from '@/components/ShareButton';
 import { POST_REPORT_REASONS, postExcerpt } from '@/lib/postTypes';
 import { postLink } from '@/components/feed/FeedShare';
@@ -10,7 +11,7 @@ import { postLink } from '@/components/feed/FeedShare';
 // gate pops the prompt); deleting is the author's, an admin's, or a
 // moderator's. The report form itself lives in the card (ReportPostForm
 // below) — the menu only asks the card to open it.
-export default function FeedPostMenu({ post, user, onReport, onDeleted }) {
+export default function FeedPostMenu({ post, user, onReport, onDeleted, onCelebration }) {
   const [open,setOpen]=useState(false),[saved,setSaved]=useState(null),[busy,setBusy]=useState(false),[note,setNote]=useState(''),[err,setErr]=useState('');
   const ref=useRef(null),timer=useRef(null),btn=useRef(null);
   const member=!!user&&!user.guest;
@@ -90,6 +91,14 @@ export default function FeedPostMenu({ post, user, onReport, onDeleted }) {
     if(r.status>=400){ setErr(r.data?.error||'Could not delete'); return; }
     setOpen(false); onDeleted?.(post.id);
   };
+  // The author of a new-job post can keep its celebration quiet or bring it
+  // back, and change the animation while it shows.
+  const celebration=async(patch)=>{
+    setOpen(false);
+    if(patch==='pick'){ onCelebration?.('pick'); return; }
+    const r=await onCelebration?.(patch);
+    if(r&&r.status>=400){ setOpen(true); setErr(r.data?.error||'Could not save'); }
+  };
   const shareText=`${postExcerpt(post.body||post.repost_body,120)||`A post by ${post.author_name||'a community member'} on Klal`} — ${postLink(post.id)}`;
   const item='flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm font-semibold text-brand-body hover:bg-brand-tint hover:text-brand-ink focus:bg-brand-tint focus:outline-none disabled:opacity-50';
 
@@ -100,6 +109,10 @@ export default function FeedPostMenu({ post, user, onReport, onDeleted }) {
       <a role="menuitem" href={waShareUrl(shareText)} target="_blank" rel="noreferrer" onClick={()=>setOpen(false)} className={item}><MessageCircle size={16} style={{color:WA_GREEN}}/>Share on WhatsApp</a>
       {!isOwn&&<button type="button" role="menuitem" onClick={save} disabled={busy||(member&&saved===null)} className={item}>{saved?<BookmarkCheck size={16} className="text-brand-teal"/>:<Bookmark size={16}/>}{note&&note!=='Copied'?note:(saved?'Unsave':'Save post')}</button>}
       {!isOwn&&<button type="button" role="menuitem" onClick={report} className={item}><Flag size={16}/>Report post</button>}
+      {isOwn&&isNewJob(post)&&(celebrates(post)
+        ?<><button type="button" role="menuitem" onClick={()=>celebration('pick')} className={item}><Sparkles size={16}/>Change the animation</button>
+          <button type="button" role="menuitem" onClick={()=>celebration({celebration_public:false})} className={item}><EyeOff size={16}/>Hide the celebration</button></>
+        :<button type="button" role="menuitem" onClick={()=>celebration({celebration_public:true})} className={item}><PartyPopper size={16}/>Celebrate publicly</button>)}
       {canDelete&&<button type="button" role="menuitem" onClick={del} disabled={busy} className={`${item} text-brand-error hover:text-brand-error`}>{busy?<Loader2 size={16} className="animate-spin"/>:<Trash2 size={16}/>}Delete post</button>}
       {err&&<p className="px-3 py-1.5 text-xs font-semibold text-brand-error">{err}</p>}
     </div>}

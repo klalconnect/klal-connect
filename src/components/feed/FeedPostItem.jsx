@@ -8,7 +8,9 @@ import FeedShareButton from '@/components/feed/FeedShare';
 import Headline from '@/components/Headline';
 import ReactionPicker, { useReactionPicker } from '@/components/feed/ReactionPicker';
 import TranslateToggle from '@/components/TranslateToggle';
-import { POST_TYPE_BY_ID, BADGE_TONES, normalizePostType } from '@/lib/postTypes';
+import { POST_TYPE_BY_ID, BADGE_TONES, normalizePostType, shownPostType } from '@/lib/postTypes';
+import { celebrates, isNewJob } from '@/lib/celebrations';
+import { CelebrationBurst, CelebrationChoice, NewJobBanner, useCelebration } from '@/components/feed/Celebration';
 import { REACTION_BY_ID, DEFAULT_REACTION, reactionOf, topReactions } from '@/lib/reactions';
 import { timeAgo, fullDate } from '@/lib/time';
 import { isScheduled, postedAt, scheduleLabel, toLocalInput } from '@/lib/scheduledPosts';
@@ -157,16 +159,46 @@ export default function FeedPostItem(props) {
     return ()=>clearTimeout(t);
   },[post]);
   if(isScheduled(post)) return <ScheduledPostItem post={post} onChanged={setPost} onDeleted={props.onDeleted}/>;
-  return <LivePostItem {...props} post={post}/>;
+  return <LivePostItem {...props} post={post} onChanged={setPost}/>;
 }
 
-function LivePostItem({ post, user, onDeleted, onReposted }) {
-  const type=POST_TYPE_BY_ID[normalizePostType(post.post_type)];
+// What only the author of a new-job post sees: the note that the celebration
+// is kept quiet, or the animation picker opened from the ••• menu.
+function CelebrationControls({ post, picking, onPicked, onChanged }) {
+  const [busy,setBusy]=useState(false),[err,setErr]=useState('');
+  const set=async(patch)=>{
+    setBusy(true); setErr('');
+    const r=await api.functions.invoke('setPostCelebration',{post_id:post.id,...patch});
+    setBusy(false);
+    if(r.status>=400){ setErr(r.data?.error||'Could not save'); return; }
+    onChanged?.(r.data.post); onPicked?.();
+  };
+  if(!celebrates(post)) return <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg bg-brand-tint px-3 py-2 text-sm text-brand-body">
+    <span className="min-w-0 flex-1">🎉 Your new-job celebration is kept quiet. Others see this as a regular update.</span>
+    <button type="button" disabled={busy} onClick={()=>set({celebration_public:true})} className="shrink-0 text-xs font-semibold text-brand-teal hover:underline disabled:opacity-50">Celebrate publicly</button>
+    {err&&<span className="basis-full text-xs font-semibold text-brand-error">{err}</span>}
+  </div>;
+  if(!picking) return null;
+  return <div className="space-y-2 rounded-lg bg-brand-tint p-3">
+    <p className="text-xs font-semibold text-brand-ink">Pick the animation everyone sees</p>
+    <CelebrationChoice value={post.celebration} onChange={c=>set({celebration:c})}/>
+    {err&&<p className="text-xs font-semibold text-brand-error">{err}</p>}
+  </div>;
+}
+
+function LivePostItem({ post, user, onDeleted, onReposted, onChanged }) {
+  const type=POST_TYPE_BY_ID[shownPostType(post)];
   const isAsk=type.id==='question';
   const [mine,setMine]=useState(null),[likes,setLikes]=useState(post.like_count||0),[counts,setCounts]=useState(post.reaction_counts||{}),[showComments,setShowComments]=useState(false),[cc,setCc]=useState(post.comment_count||0),[likeErr,setLikeErr]=useState(''),[helpfulId,setHelpfulId]=useState(post.helpful_comment_id||null),[reporting,setReporting]=useState(false);
   const [translate,setTranslate]=useState({enabled:false,languages:[]});
   const views=post.view_count||0;
   const picker=useReactionPicker();
+  // A new-job post that celebrates plays its animation as it scrolls into
+  // view, and again on its sparkle button.
+  const card=React.useRef(null);
+  const party=celebrates(post);
+  const {play,replay}=useCelebration(card,party);
+  const [pickingCelebration,setPickingCelebration]=useState(false);
   React.useEffect(()=>{api.getConfig().then(c=>setTranslate({enabled:!!c.translateEnabled&&!!user&&!user.guest,languages:c.translateLanguages||[]})).catch(()=>{});},[user]);
   // These four are seeded from props into state, and posts are keyed by id —
   // so a refetch remounts nothing and the counts froze at whatever they were
@@ -198,7 +230,8 @@ function LivePostItem({ post, user, onDeleted, onReposted }) {
   const stack=top.length?top:(likes>0?[REACTION_BY_ID[DEFAULT_REACTION]]:[]);
   // The author sees how many people saw it; nobody else does, and the shared
   // guest session is nobody.
-  const showViews=!!user&&!user.guest&&post.created_by_id===user.id;
+  const isOwn=!!user&&!user.guest&&post.created_by_id===user.id;
+  const showViews=isOwn;
   const when=timeAgo(postedAt(post));
   const isRepost=!!post.repost_of;
   // Reposting your own post is just sharing it; the Share button does that.
@@ -206,7 +239,8 @@ function LivePostItem({ post, user, onDeleted, onReposted }) {
   const reposts=post.repost_count||0;
   const action='flex flex-1 flex-col items-center justify-center gap-1 rounded-lg px-1 py-1.5 text-xs font-semibold hover:bg-brand-tint sm:flex-none sm:flex-row sm:gap-1.5 sm:px-3 sm:text-sm';
 
-  return <article className="panel space-y-3">
+  return <article ref={card} className="panel relative space-y-3">
+    {party&&play>0&&<CelebrationBurst key={play} kind={post.celebration} seed={`${post.id}:${play}`}/>}
     <div className="flex items-start gap-3">
       <div className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-brand-tint text-sm font-bold text-brand-teal">{(post.author_name||'KC').split(' ').map(x=>x[0]).slice(0,2).join('')}</div>
       <div className="min-w-0 flex-1">
@@ -219,8 +253,10 @@ function LivePostItem({ post, user, onDeleted, onReposted }) {
         <Headline text={post.author_headline}/>
         {post.business_name&&<p className="text-xs font-medium text-[#0D6B66]">{post.business_name}</p>}
       </div>
-      <FeedPostMenu post={post} user={user} onReport={()=>setReporting(true)} onDeleted={onDeleted}/>
+      <FeedPostMenu post={post} user={user} onReport={()=>setReporting(true)} onDeleted={onDeleted} onCelebration={patch=>patch==='pick'?setPickingCelebration(true):api.functions.invoke('setPostCelebration',{post_id:post.id,...patch}).then(r=>{ if(r.status<400) onChanged?.(r.data.post); return r; })}/>
     </div>
+    {party&&<NewJobBanner post={post} own={isOwn} mine={mine} onReplay={replay} onMazelTov={()=>react('mazel_tov')}/>}
+    {isOwn&&isNewJob(post)&&<CelebrationControls post={post} picking={pickingCelebration} onPicked={()=>setPickingCelebration(false)} onChanged={onChanged}/>}
     {post.body&&<p className="whitespace-pre-line leading-7 text-brand-body">{post.body}</p>}
     {post.body&&<TranslateToggle text={post.body} enabled={translate.enabled} languages={translate.languages}/>}
     {isRepost&&<RepostedCard post={post}/>}

@@ -17,6 +17,7 @@ import { canEditListing, canSetPaymentLink, normalizeGallery, normalizeLogoUrl }
 import { REACTION_BY_ID, DEFAULT_REACTION, reactionOf } from '../src/lib/reactions.js';
 import { POST_REPORT_REASON_BY_ID, postExcerpt } from '../src/lib/postTypes.js';
 import { isScheduled, MAX_SCHEDULE_DAYS } from '../src/lib/scheduledPosts.js';
+import { celebrationOf, JOB_FIELD_MAX } from '../src/lib/celebrations.js';
 
 const BADGE_BY_ID = Object.fromEntries(BADGES.map((b) => [b.id, b]));
 
@@ -49,9 +50,26 @@ const INITIAL_STATUS = REVIEW_FIRST ? 'pending' : 'published';
 // The composer's ids (src/lib/postTypes.js). `update` was an older spelling of
 // `post` and still exists on seeded rows, so it is folded in rather than
 // rejected — otherwise the "Updates" filter never matched those posts.
-const POST_TYPES = new Set(['post', 'question', 'insight', 'promotion']);
+const POST_TYPES = new Set(['post', 'question', 'insight', 'promotion', 'new_job']);
 const EMPLOYMENT_TYPES = new Set(['full_time', 'part_time', 'contract', 'seasonal', 'volunteer']);
 const postType = (value) => (value === 'update' ? 'post' : POST_TYPES.has(value) ? value : 'post');
+
+// What a new-job post carries besides its words: the role, where, which
+// animation it plays, and whether it celebrates in public. Other kinds of
+// post carry none of it.
+function newJobFields({ job_title, job_company, celebration, celebration_public }) {
+  const field = (value, what) => {
+    const text = String(value || '').replace(/\s+/g, ' ').trim();
+    if (text.length > JOB_FIELD_MAX) fail(`${what} must be ${JOB_FIELD_MAX} characters or fewer.`);
+    return text;
+  };
+  return {
+    job_title: field(job_title, 'The job title'),
+    job_company: field(job_company, 'The company name'),
+    celebration: celebrationOf(celebration),
+    celebration_public: celebration_public !== false,
+  };
+}
 
 // A post somebody may act on: there, and already live. A scheduled post is
 // nobody's to like, comment on, save or repost until its time comes — it is
@@ -558,17 +576,19 @@ export const functions = {
 
   // ---- feed -----------------------------------------------------------------
 
-  async createPost({ body, post_type, image_urls, publish_at }, user) {
+  async createPost({ body, post_type, image_urls, publish_at, job_title, job_company, celebration, celebration_public }, user) {
     await assertWritable(user);
     const text = String(body || '').trim();
     if (!text && !(image_urls || []).length) fail('Write something to post.');
     if (text.length > 5000) fail('Posts must be 5000 characters or fewer.');
     const when = await scheduleTime(publish_at, user);
+    const kind = postType(post_type);
     const post = await store.create(
       'FeedPost',
       {
         body: text,
-        post_type: postType(post_type),
+        post_type: kind,
+        ...(kind === 'new_job' ? newJobFields({ job_title, job_company, celebration, celebration_public }) : {}),
         image_urls: image_urls || [],
         ...(when ? { publish_at: when } : {}),
         like_count: 0,
@@ -603,6 +623,22 @@ export const functions = {
       if (!when) fail('Pick a date and time for your post.');
       patch.publish_at = when;
     }
+    return { post: await store.update('FeedPost', post_id, patch) };
+  },
+
+  // The author of a new-job post showing its celebration to everyone, keeping
+  // it quiet (it then reads as a plain update), or picking another animation.
+  // Any time, before or after it goes live.
+  async setPostCelebration({ post_id, celebration_public, celebration }, user) {
+    await assertWritable(user);
+    need(post_id, 'Missing post.');
+    const post = await store.get('FeedPost', post_id);
+    if (!post) fail('Post not found.', 404);
+    if (post.created_by_id !== user.id) fail('You can only change your own posts.', 403);
+    if (post.post_type !== 'new_job') fail('Only a new-job post has a celebration.');
+    const patch = {};
+    if (celebration_public !== undefined) patch.celebration_public = celebration_public !== false;
+    if (celebration !== undefined) patch.celebration = celebrationOf(celebration);
     return { post: await store.update('FeedPost', post_id, patch) };
   },
 
