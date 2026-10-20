@@ -4,11 +4,6 @@ import { WORK_STATUSES, workStatusOf } from '@/lib/workStatus';
 
 const ICONS = { open_to_work: BriefcaseBusiness, hiring: UserPlus };
 
-// The frame fades from the full colour at the bottom, where the tag sits, to
-// a light tint over the top, so it reads as a glow round the photo rather
-// than a heavy border. Eight-digit hex: the last two are the opacity.
-const frame = (c) => `conic-gradient(from 0deg, ${c}40, ${c} 130deg, ${c} 230deg, ${c}40)`;
-
 // The see-through tag on the photo: frosted and faintly tinted, so the
 // picture shows softly through it, with the status in its colour. Inline because the brand
 // colours have no <alpha-value>: bg-brand-surface/80 is never generated.
@@ -39,7 +34,7 @@ export function WorkStatusRing({ user, thickness = 8, ribbon = true, className =
   // whatever non-flex parent it lands in (a card, a link), turning a ring
   // into a full-width pill the moment rounded-full meets a non-square box.
   return (
-    <div className={`relative inline-block rounded-full align-top ${className}`} style={{ padding: thickness, background: frame(status.color) }} title={status.label}>
+    <div className={`relative inline-block rounded-full align-top ${className}`} style={{ padding: thickness, background: status.color }} title={status.label}>
       {children}
       {ribbon && <Tag status={status}/>}
     </div>
