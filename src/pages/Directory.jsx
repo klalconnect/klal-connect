@@ -11,9 +11,9 @@ import ResourceCard from '@/components/ResourceCard';
 
 export default function Directory(){
   const {data:categories=[]}=useQuery({queryKey:['categories'],queryFn:()=>api.entities.Category.list('order')});
-  // The community chosen on the homepage. Arriving here and finding the search
-  // box empty again is how a site tells someone it was not paying attention.
-  const [community]=useCommunity();
+  // The place last searched from this page. Home keeps its own, so a search
+  // there no longer fills itself in here.
+  const [community]=useCommunity('', 'resources');
 
   // Each rail is ranked over ALL published listings, not over a recency window.
   // Previously every rail was computed from the newest 30, so the moment there
