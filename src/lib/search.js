@@ -1,7 +1,7 @@
 import { categoryLabel } from './categories.js';
 import { aliasGroup, aliasPhrases, keywordSuggestions, placeSuggestions } from './searchTerms.js';
-import { placeMatcher, isPlaceWord } from './place.js';
-import { countryName, countryOf, countryMatcher, inCountry } from './countries.js';
+import { placeMatcher, isPlaceWord, stateName } from './place.js';
+import { countryName, countryOf, countryMatcher, countriesFrom, countriesStarting, inCountry, US } from './countries.js';
 
 // Directory search: what someone types, matched the way they meant it.
 //
@@ -228,6 +228,12 @@ function run(providers, parsed, where, anywhere, country) {
   const place = parsed.place || String(where || '').trim();
   const inPlace = anywhere ? null : placeMatcher(place, providers);
   const inChosenCountry = countryMatcher(country);
+  // Listings that only match because they serve everywhere ("Nationwide",
+  // "International") are marked `wide`, so a search for the Bahamas can show
+  // what is in the Bahamas apart from what helps from anywhere.
+  const reallyInPlace = inPlace && placeMatcher(place, providers, { everywhere: false });
+  const chosen = countryName(country) || String(country || '').trim();
+  const isWide = (p) => (reallyInPlace ? !reallyInPlace(p) : false) || (chosen ? countryOf(p) !== chosen : false);
   const live = parsed.concepts.filter((c) => index.rows.some((r) => r.fields.some((f) => fieldScore(f, c) > 0)));
   const nothing = parsed.concepts.length > 0 && live.length === 0;
 
@@ -248,14 +254,14 @@ function run(providers, parsed, where, anywhere, country) {
       const whole = ` ${live.map((c) => c.alts[0].join(' ')).join(' ')} `;
       if (row.fields[0].text.includes(whole) || row.fields[1].text.includes(whole)) score += 5;
     }
-    results.push({ provider: row.p, score });
+    results.push({ provider: row.p, score, wide: isWide(row.p) });
   }
   return { results, parsed: { ...parsed, place } };
 }
 
-/** How many listings a search finds, for the counts beside suggestions. */
+/** How many listings a search finds in the place itself, for the counts beside suggestions. */
 export function countMatches(providers, q, where = '', country = '') {
-  return searchDirectory(providers, { q, where, country }).results.length;
+  return searchDirectory(providers, { q, where, country }).results.filter((r) => !r.wide).length;
 }
 
 /** Keyword suggestions, each counted the way the search itself would count it. */
@@ -278,5 +284,26 @@ export function suggestPlaces(raw, providers, country = '') {
   const text = String(raw || '').trim();
   const everywhere = { group: 'Places with listings', kind: 'place', label: 'Everywhere', value: '', hint: country ? `all of ${country}` : 'all communities' };
   if (!text) return [everywhere];
-  return [...('everywhere'.startsWith(text.toLowerCase()) ? [everywhere] : []), ...placeSuggestions(text, inCountry(providers, country))];
+  const here = inCountry(providers, country);
+  // Countries and states with listings, from the first letters typed: "Bah"
+  // offers the Bahamas, "Flo" Florida. Cities follow.
+  const wanted = country ? new Set() : countriesStarting(text);
+  const countries = countriesFrom(here).filter((c) => wanted.has(c.country)).slice(0, 2)
+    .map((c) => ({ group: 'Places with listings', kind: 'place', label: c.country, value: c.country, hint: 'country', count: c.count }));
+  const states = (!country || country === US) && text.length >= 2 ? stateSuggestions(text, here) : [];
+  return [...('everywhere'.startsWith(text.toLowerCase()) ? [everywhere] : []), ...countries, ...states, ...placeSuggestions(text, here)].slice(0, 8);
+}
+
+// US states with listings whose name starts a word with what was typed.
+function stateSuggestions(text, providers) {
+  const t = words(text).join(' ');
+  if (!t) return [];
+  const counts = new Map();
+  for (const p of providers) {
+    if (countryOf(p) !== US) continue;
+    const name = stateName(p.state);
+    if (name && (name.toLowerCase().startsWith(t) || name.toLowerCase().includes(` ${t}`))) counts.set(name, (counts.get(name) || 0) + 1);
+  }
+  return [...counts].sort((a, b) => b[1] - a[1]).slice(0, 2)
+    .map(([name, count]) => ({ group: 'Places with listings', kind: 'place', label: name, value: name, hint: 'state', count }));
 }

@@ -67,6 +67,20 @@ export function countryName(text) {
   return BY_NAME.get(norm(raw)) || '';
 }
 
+/**
+ * The countries whose name, or a name people call them, has a word starting
+ * with `text`: "bah" is the Bahamas, "kingdom" and "eng" the United Kingdom.
+ */
+export function countriesStarting(text) {
+  const t = norm(text);
+  if (t.length < 2) return new Set();
+  const found = new Set();
+  for (const [name, country] of BY_NAME) {
+    if (name.startsWith(t) || name.includes(` ${t}`)) found.add(country);
+  }
+  return found;
+}
+
 // A listing from before countries were recorded: a US state is the US.
 const US_STATES = new Set(('al ak az ar ca co ct de dc fl ga hi id il in ia ks ky la me md ma mi mn ms mo mt ne nv nh nj nm ' +
   'ny nc nd oh ok or pa ri sc sd tn tx ut vt va wa wv wi wy').split(' '));
@@ -124,7 +138,8 @@ export function countriesFrom(providers = []) {
 /** "Paris, France" or "Boca Raton, FL": city, region and, outside the US, the country. */
 export function placeLine(provider) {
   const country = countryOf(provider);
-  const parts = [provider?.city, provider?.state].map((s) => String(s || '').trim()).filter(Boolean);
+  // "OTHER" is the listing form's state for somewhere outside the US, not a place.
+  const parts = [provider?.city, provider?.state].map((s) => String(s || '').trim()).filter((s) => s && !/^other$/i.test(s));
   if (country && country !== US && !parts.some((s) => s.toLowerCase() === country.toLowerCase())) parts.push(country);
   return parts.join(', ');
 }

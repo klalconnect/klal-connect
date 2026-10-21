@@ -109,4 +109,28 @@ ok('the filter lists countries with listings, US first; places follow the countr
   assert.equal(placeLine({ city: 'Paris', country: 'France' }), 'Paris, France');
   assert.equal(placeLine({ city: 'Boca Raton', state: 'FL' }), 'Boca Raton, FL');
 });
+const B = [...W, L('Chabad of the Bahamas', 'Shuls', 'Chabad', 'Nassau', 'OTHER', { country: 'Bahamas' })];
+const split = (where, country = '') => {
+  const r = searchDirectory(B, { where, country }).results;
+  return { local: r.filter((x) => !x.wide).map((x) => x.provider.name), wide: r.filter((x) => x.wide).map((x) => x.provider.name) };
+};
+ok('a place search keeps "serves everywhere" listings apart from the ones there', () => {
+  assert.deepEqual(split('Bahamas').local, ['Chabad of the Bahamas']);
+  assert.ok(split('Bahamas').wide.includes('Torah by Phone'));
+  assert.deepEqual(split('', 'Bahamas').local, ['Chabad of the Bahamas']);
+  assert.ok(split('', 'Bahamas').wide.includes('Torah by Phone'));
+  assert.ok(split('Boca Raton').wide.includes('OHEL'));
+  assert.ok(!split('Boca Raton').local.includes('OHEL'));
+  // In its own city, a nationwide listing is local.
+  assert.ok(split('Brooklyn').local.includes('OHEL'));
+  assert.deepEqual(split(''), { local: B.map((p) => p.name), wide: [] });
+});
+ok('the Where box reacts from the first letters, for countries and states too', () => {
+  assert.deepEqual(split('Bah').local, ['Chabad of the Bahamas']);
+  assert.deepEqual(suggestPlaces('Bah', B).map((s) => s.label), ['Bahamas', 'Nassau']);
+  assert.equal(suggestPlaces('Bah', B)[1].hint, 'Bahamas');
+  assert.equal(suggestPlaces('Isr', B)[0].label, 'Israel');
+  assert.equal(suggestPlaces('Flo', B)[0].label, 'Florida');
+  assert.equal(suggestPlaces('Eng', B).length, 0);
+});
 console.log(`\n${passed} passed`);
