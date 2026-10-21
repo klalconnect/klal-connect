@@ -21,7 +21,7 @@ export default function UserCard({ user, me, connections, onReload }) {
       {/* relative z-10, or the banner paints over the avatar pulled up beneath it. */}
       <div className="relative z-10 -mt-8 space-y-3 px-5 pb-5">
         <Link to={`/profile/${user.id}`} className="block">
-          <WorkStatusRing user={user}>
+          <WorkStatusRing user={user} glow={12} ribbon={false}>
           {user.avatar_url ? (
             <div className="h-14 w-14 overflow-hidden rounded-full" style={PHOTO_EDGE}>
               <Image src={user.avatar_url} fittingType="fill" className="h-14 w-14" />
