@@ -33,6 +33,14 @@ export default function Feed(){
     return fetching.then(rows=>{ if(run.current===mine){ setPosts(rows); setMore(!postId&&rows.length>=shown.current); setLoading(false); } });
   };
   const showMore=()=>{ shown.current+=PAGE; setMore(false); load(true); };
+  // Continuous scroll: the next page loads as the reader nears the end.
+  const end=useRef(null);
+  useEffect(()=>{
+    if(!more||!end.current||typeof IntersectionObserver==='undefined') return;
+    const seen=new IntersectionObserver(entries=>{ if(entries.some(e=>e.isIntersecting)) showMore(); },{rootMargin:'800px 0px'});
+    seen.observe(end.current);
+    return ()=>seen.disconnect();
+  },[more]);
   useEffect(()=>{setPosts(null);setLoading(true);shown.current=PAGE;const mine=++run.current;(async()=>{if(await api.auth.isAuthenticated()){try{const u=await api.auth.me();if(run.current===mine)setUser(u);}catch{}}if(run.current===mine)load();})();},[postId]);
   const removed=id=>setPosts(ps=>ps?.filter(p=>p.id!==id));
   return <div className="page-shell py-4 md:py-7">
@@ -52,7 +60,7 @@ export default function Feed(){
         {!loading&&posts?.length===0&&<div className="empty"><p>{postId?'That post is no longer available.':'Be the first to post to the Klal feed.'}</p>{postId&&<Link to="/feed" className="text-sm font-semibold text-brand-teal hover:underline">Show all posts</Link>}</div>}
         {!loading&&posts?.length>0&&visible?.length===0&&<div className="empty"><p>{filter==='unanswered'?'Every ask has an answer. Nice work, klal.':'Nothing here yet — try another filter.'}</p></div>}
         {visible?.map(p=><FeedPostItem key={p.id} post={p} user={user} onDeleted={removed} onReposted={()=>{if(postId)setParams({});load();}}/>)}
-        {more&&<button type="button" onClick={showMore} className="secondary w-full justify-center">Show more posts</button>}
+        {more&&<div ref={end} className="loading">Loading more posts…</div>}
       </div>
       <aside className="hidden space-y-5 lg:block">
         <FeedPromotedPanel/>
