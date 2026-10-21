@@ -18,9 +18,9 @@ import { WorkStatusRing } from '@/components/WorkStatus';
 
 // The author's initials, in their photo ribbon's colour when they have one
 // on (the server adds author_work_status as it is now). Too small for the
-// ribbon's words, so just the frame.
+// ribbon's words, so just the ring and glow.
 function AuthorAvatar({ post }) {
-  return <WorkStatusRing user={{ work_status: post.author_work_status }} thickness={5} ribbon={false} className="shrink-0">
+  return <WorkStatusRing user={{ work_status: post.author_work_status }} thickness={4} glow={8} ribbon={false} className="shrink-0">
     <div className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-brand-tint text-sm font-bold text-brand-teal ring-2 ring-brand-surface">{(post.author_name||'KC').split(' ').map(x=>x[0]).slice(0,2).join('')}</div>
   </WorkStatusRing>;
 }
