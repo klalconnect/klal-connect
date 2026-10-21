@@ -14,6 +14,7 @@ import { useCommunity } from '@/lib/community';
 import { useShabbosStatus } from '@/hooks/useShabbosStatus';
 import { timeInZone, timeAgo } from '@/lib/time';
 import { POST_TYPE_BY_ID, BADGE_TONES, normalizePostType } from '@/lib/postTypes';
+import { postedAt } from '@/lib/scheduledPosts';
 import { categoryLabel } from '@/lib/categories';
 
 // The words people actually use, as searches rather than category filters —
@@ -192,12 +193,12 @@ export default function Home() {
   </div>;
 }
 
-// The three newest posts, as a taste of the feed. The full post, with its
+// The top three posts in the feed's own order, as a taste of the feed. The full post, with its
 // likes and comments, is one tap away.
 function FeedPreview() {
   const { data: posts = [], isLoading } = useQuery({
     queryKey: ['feed', 'home-preview'],
-    queryFn: () => api.entities.FeedPost.list('-created_date', 3),
+    queryFn: () => api.entities.FeedPost.list('feed', 3),
   });
   return <section>
     <div className="section-head">
@@ -217,8 +218,13 @@ function FeedPreview() {
                 <span className="truncate font-semibold text-brand-ink">{p.author_name || 'Member'}</span>
                 <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${BADGE_TONES[type.tone]}`}>{type.badge}</span>
               </div>
-              {(p.author_headline || p.created_date) && <p className="truncate text-xs text-brand-muted">{[p.author_headline, p.created_date && timeAgo(p.created_date)].filter(Boolean).join(' · ')}</p>}
-              <p className="mt-2 line-clamp-3 text-sm leading-6 text-brand-body">{p.body}</p>
+              {(p.author_headline || postedAt(p)) && <p className="truncate text-xs text-brand-muted">{[p.author_headline, postedAt(p) && timeAgo(postedAt(p))].filter(Boolean).join(' · ')}</p>}
+              {p.body && <p className="mt-2 line-clamp-3 text-sm leading-6 text-brand-body">{p.body}</p>}
+              {/* A repost shows what it shares, not an empty card. */}
+              {p.repost_of && <div className="mt-2 rounded-lg p-3 ring-1 ring-brand-line">
+                {!p.repost_removed && <p className="truncate text-xs font-semibold text-brand-ink">{p.repost_author_name || 'Member'}</p>}
+                {p.repost_removed ? <p className="mt-1 text-sm text-brand-muted">The original post is no longer available.</p> : p.repost_body && <p className="mt-1 line-clamp-3 text-sm leading-6 text-brand-body">{p.repost_body}</p>}
+              </div>}
             </div>
           </div>
         </Link>;

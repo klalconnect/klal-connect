@@ -20,6 +20,19 @@ export const postedAt = (post) => post?.publish_at || post?.created_date;
 // they were written.
 export const byPostedAtDesc = (a, b) => String(postedAt(b) || '').localeCompare(String(postedAt(a) || ''));
 
+// The feed's own order: newest first, but a business post or an
+// accomplishment gets a head start, as if it had gone live this many hours
+// later than it did. So a new job from this morning sits above a passing
+// update from an hour ago, and nothing stays pinned at the top for days.
+// Likes and comments play no part (yet).
+export const FEED_HEAD_START_HOURS = { new_job: 12, promotion: 12, insight: 6, question: 6 };
+
+const feedScore = (post) => {
+  const t = Date.parse(postedAt(post) || '');
+  return (Number.isFinite(t) ? t : 0) + (FEED_HEAD_START_HOURS[post?.post_type] || 0) * 3_600_000;
+};
+export const byFeedRank = (a, b) => feedScore(b) - feedScore(a) || byPostedAtDesc(a, b);
+
 // "Fri, Oct 17 at 9:00 AM" in the reader's own time zone.
 export function scheduleLabel(value) {
   const t = new Date(value);

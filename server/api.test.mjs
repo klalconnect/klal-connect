@@ -140,6 +140,16 @@ ok(r.status === 403 && r.data.guest, 'guest cannot react');
   ok(await seen(userB), 'once live, everyone sees it');
   const feed = (await call('GET', '/entities/FeedPost?sort=-created_date', { token: userB })).data;
   ok(feed[0]?.id === sp.id, 'and it sits at the top, by when it went live', feed[0]?.id);
+  // The feed's own order: an accomplishment gets a head start over a passing
+  // update posted after it; a post still scheduled stays its author's alone.
+  const job = (await call('POST', '/functions/createPost', { token: userA, body: { body: 'grand opening special', post_type: 'promotion' } })).data.post;
+  const chat = (await call('POST', '/functions/createPost', { token: userA, body: { body: 'nice weather', post_type: 'post' } })).data.post;
+  const hidden = (await call('POST', '/functions/createPost', { token: userA, body: { body: 'later', publish_at: later } })).data.post;
+  const ranked = (await call('GET', '/entities/FeedPost?sort=feed&limit=50', { token: userB })).data.map((p) => p.id);
+  ok(ranked.indexOf(job.id) > -1 && ranked.indexOf(job.id) < ranked.indexOf(chat.id), 'a promotion ranks above a newer plain update', JSON.stringify(ranked.slice(0, 5)));
+  ok(!ranked.includes(hidden.id), 'sort=feed still hides a scheduled post from others');
+  const newest = (await call('GET', '/entities/FeedPost?sort=-created_date', { token: userB })).data;
+  ok(newest[0]?.id === chat.id, 'newest-first is unchanged for everything else', newest[0]?.id);
   const again = await call('POST', '/functions/updateScheduledPost', { token: userA, body: { post_id: sp.id, body: 'too late' } });
   ok(again.status === 400, 'a live post is no longer a scheduled one to edit', JSON.stringify(again.data));
   // Nothing goes live on Shabbos. A member in New York, the coming Saturday at noon there.

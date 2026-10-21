@@ -20,7 +20,7 @@ import { isSensitiveListing } from '../src/lib/sensitivity.js';
 import { listingEditor, normalizeListingPatch, canSetPaymentLink } from '../src/lib/listing.js';
 import { verificationAfterEdit, pinAfterEdit, hasCoordinate } from '../src/lib/trust.js';
 import { isValidTimeZone } from './shabbos.js';
-import { isScheduled, byPostedAtDesc } from '../src/lib/scheduledPosts.js';
+import { isScheduled, byPostedAtDesc, byFeedRank } from '../src/lib/scheduledPosts.js';
 import { BOOKING_LABELS, DEFAULT_BOOKING_LABEL, withScheme } from '../src/lib/booking.js';
 import { WORK_STATUS_IDS } from '../src/lib/workStatus.js';
 import { isDemoMode } from './db.js';
@@ -398,12 +398,16 @@ app.get('/api/entities/User', async (req, res, next) => {
 
 app.get('/api/entities/:entity', async (req, res, next) => {
   const { entity } = req.params;
-  const { sort, limit, query } = req.query;
+  const { limit, query } = req.query;
+  // sort=feed is the feed's own order (see byFeedRank), FeedPost only.
+  const feedOrder = entity === 'FeedPost' && req.query.sort === 'feed';
+  const sort = feedOrder ? '-created_date' : req.query.sort;
   const q = parseJSON(query, null);
   let rows = q ? await store.filter(entity, q, sort, null) : await store.list(entity, sort, null);
   // A scheduled post takes its place in the feed at the time it went live, not
   // the time it was written.
-  if (entity === 'FeedPost' && (sort || '-created_date') === '-created_date') rows = [...rows].sort(byPostedAtDesc);
+  if (feedOrder) rows = [...rows].sort(byFeedRank);
+  else if (entity === 'FeedPost' && (sort || '-created_date') === '-created_date') rows = [...rows].sort(byPostedAtDesc);
   const visible = await readable(entity, rows, req.user);
   res.json(limit ? visible.slice(0, Number(limit)) : visible);
 });

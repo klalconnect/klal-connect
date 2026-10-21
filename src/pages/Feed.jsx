@@ -7,6 +7,8 @@ import FeedPromotedPanel from '@/components/feed/FeedPromotedPanel';
 import FeedPeoplePanel from '@/components/feed/FeedPeoplePanel';
 import { FEED_FILTERS, matchesFilter } from '@/lib/postTypes';
 
+const PAGE=50;
+
 export default function Feed(){
   const [posts,setPosts]=useState(null),[user,setUser]=useState(null),[loading,setLoading]=useState(true),[filter,setFilter]=useState('all');
   // ?post=<id> — a shared or saved link — shows that one post on its own.
@@ -21,13 +23,17 @@ export default function Feed(){
   // Loads are numbered so that one still in flight when the next starts
   // (Show all posts clicked mid-load, say) cannot land on top of it.
   const run=useRef(0);
-  const load=()=>{
+  // How many posts to fetch: a page more each time Show more posts is tapped.
+  const shown=useRef(PAGE);
+  const [more,setMore]=useState(false);
+  const load=(quiet)=>{
     const mine=++run.current;
-    setLoading(true);
-    const fetching=postId?api.entities.FeedPost.get(postId).then(p=>[p]).catch(()=>[]):api.entities.FeedPost.list('-created_date',50);
-    return fetching.then(rows=>{ if(run.current===mine){ setPosts(rows); setLoading(false); } });
+    if(!quiet)setLoading(true);
+    const fetching=postId?api.entities.FeedPost.get(postId).then(p=>[p]).catch(()=>[]):api.entities.FeedPost.list('feed',shown.current);
+    return fetching.then(rows=>{ if(run.current===mine){ setPosts(rows); setMore(!postId&&rows.length>=shown.current); setLoading(false); } });
   };
-  useEffect(()=>{setPosts(null);setLoading(true);const mine=++run.current;(async()=>{if(await api.auth.isAuthenticated()){try{const u=await api.auth.me();if(run.current===mine)setUser(u);}catch{}}if(run.current===mine)load();})();},[postId]);
+  const showMore=()=>{ shown.current+=PAGE; setMore(false); load(true); };
+  useEffect(()=>{setPosts(null);setLoading(true);shown.current=PAGE;const mine=++run.current;(async()=>{if(await api.auth.isAuthenticated()){try{const u=await api.auth.me();if(run.current===mine)setUser(u);}catch{}}if(run.current===mine)load();})();},[postId]);
   const removed=id=>setPosts(ps=>ps?.filter(p=>p.id!==id));
   return <div className="page-shell py-4 md:py-7">
     <div className="mb-3 md:mb-5"><span className="eyebrow">KLAL FEED</span><h1 className="title">Community business feed</h1><p className="helper hidden sm:block">Post updates, promote your business, ask the klal, and find what's happening near you.</p></div>
@@ -46,6 +52,7 @@ export default function Feed(){
         {!loading&&posts?.length===0&&<div className="empty"><p>{postId?'That post is no longer available.':'Be the first to post to the Klal feed.'}</p>{postId&&<Link to="/feed" className="text-sm font-semibold text-brand-teal hover:underline">Show all posts</Link>}</div>}
         {!loading&&posts?.length>0&&visible?.length===0&&<div className="empty"><p>{filter==='unanswered'?'Every ask has an answer. Nice work, klal.':'Nothing here yet — try another filter.'}</p></div>}
         {visible?.map(p=><FeedPostItem key={p.id} post={p} user={user} onDeleted={removed} onReposted={()=>{if(postId)setParams({});load();}}/>)}
+        {more&&<button type="button" onClick={showMore} className="secondary w-full justify-center">Show more posts</button>}
       </div>
       <aside className="hidden space-y-5 lg:block">
         <FeedPromotedPanel/>
