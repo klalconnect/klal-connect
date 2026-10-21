@@ -24,12 +24,24 @@ export const byPostedAtDesc = (a, b) => String(postedAt(b) || '').localeCompare(
 // accomplishment gets a head start, as if it had gone live this many hours
 // later than it did. So a new job from this morning sits above a passing
 // update from an hour ago, and nothing stays pinned at the top for days.
-// Likes and comments play no part (yet).
 export const FEED_HEAD_START_HOURS = { new_job: 12, promotion: 12, insight: 6, question: 6 };
+
+// A good post earns more: each like, comment and repost adds hours too, up to
+// a cap, so a popular post rises but cannot sit on top of the feed for a week.
+export const FEED_EARNED_HOURS = { like: 1, comment: 2, repost: 2, max: 12 };
+
+const count = (n) => Math.max(0, Number(n) || 0);
+export const earnedHours = (post) => Math.min(
+  FEED_EARNED_HOURS.max,
+  count(post?.like_count) * FEED_EARNED_HOURS.like
+    + count(post?.comment_count) * FEED_EARNED_HOURS.comment
+    + count(post?.repost_count) * FEED_EARNED_HOURS.repost,
+);
 
 const feedScore = (post) => {
   const t = Date.parse(postedAt(post) || '');
-  return (Number.isFinite(t) ? t : 0) + (FEED_HEAD_START_HOURS[post?.post_type] || 0) * 3_600_000;
+  const hours = (FEED_HEAD_START_HOURS[post?.post_type] || 0) + earnedHours(post);
+  return (Number.isFinite(t) ? t : 0) + hours * 3_600_000;
 };
 export const byFeedRank = (a, b) => feedScore(b) - feedScore(a) || byPostedAtDesc(a, b);
 

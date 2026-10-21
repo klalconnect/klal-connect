@@ -148,8 +148,14 @@ ok(r.status === 403 && r.data.guest, 'guest cannot react');
   const ranked = (await call('GET', '/entities/FeedPost?sort=feed&limit=50', { token: userB })).data.map((p) => p.id);
   ok(ranked.indexOf(job.id) > -1 && ranked.indexOf(job.id) < ranked.indexOf(chat.id), 'a promotion ranks above a newer plain update', JSON.stringify(ranked.slice(0, 5)));
   ok(!ranked.includes(hidden.id), 'sort=feed still hides a scheduled post from others');
+  // Likes and comments lift a post too.
+  const liked = (await call('POST', '/functions/createPost', { token: userA, body: { body: 'a well-liked update', post_type: 'post' } })).data.post;
+  const plain = (await call('POST', '/functions/createPost', { token: userA, body: { body: 'a quiet update', post_type: 'post' } })).data.post;
+  await call('POST', '/functions/toggleLike', { token: userB, body: { post_id: liked.id } });
+  const lifted = (await call('GET', '/entities/FeedPost?sort=feed&limit=50', { token: userB })).data.map((p) => p.id);
+  ok(lifted.indexOf(liked.id) < lifted.indexOf(plain.id), 'a liked post ranks above a newer one nobody liked', JSON.stringify(lifted.slice(0, 5)));
   const newest = (await call('GET', '/entities/FeedPost?sort=-created_date', { token: userB })).data;
-  ok(newest[0]?.id === chat.id, 'newest-first is unchanged for everything else', newest[0]?.id);
+  ok(newest[0]?.id === plain.id, 'newest-first is unchanged for everything else', newest[0]?.id);
   const again = await call('POST', '/functions/updateScheduledPost', { token: userA, body: { post_id: sp.id, body: 'too late' } });
   ok(again.status === 400, 'a live post is no longer a scheduled one to edit', JSON.stringify(again.data));
   // Nothing goes live on Shabbos. A member in New York, the coming Saturday at noon there.
