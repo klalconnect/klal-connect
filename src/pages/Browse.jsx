@@ -31,7 +31,8 @@ export default function Browse() {
   const [providers, setProviders] = useState([]);
   const [categories, setCategories] = useState([]);
   const [q, setQ] = useState(params.get('q') || '');
-  // The community chosen anywhere else on the site, unless this link names one.
+  // The place last searched from Home or Resources (whichever this came from),
+  // unless this link names one.
   // A link with an empty location (a search with the Where box left blank)
   // means everywhere.
   const linkedPlace = params.has('location');

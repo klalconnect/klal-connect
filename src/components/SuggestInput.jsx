@@ -116,8 +116,10 @@ export default function SuggestInput({
           <X size={16} />
         </button>
       )}
+      {/* See-through, like the back-to-top arrow: the blur keeps it readable
+          over whatever is behind it, in both themes. */}
       {show && (
-        <ul id={listId} role="listbox" className="absolute left-0 right-0 z-40 mt-1 max-h-80 min-w-[16rem] overflow-y-auto rounded-xl border border-brand-line bg-brand-surface py-1 text-left shadow-lg">
+        <ul id={listId} role="listbox" className="absolute left-0 right-0 z-40 mt-1 max-h-80 min-w-[16rem] overflow-y-auto rounded-xl border border-brand-line/50 bg-brand-surface/55 py-1 text-left shadow-lg backdrop-blur-md backdrop-saturate-150">
           {items.map((item, i) => {
             const heading = item.group && item.group !== lastGroup ? item.group : null;
             lastGroup = item.group;
