@@ -37,7 +37,7 @@ const fromProvider = (row) => ({
   gallery: Array.isArray(row?.gallery) ? row.gallery : [],
   minyanim: Array.isArray(row?.minyanim) ? row.minyanim : [],
   // A listing from before countries were recorded shows the one its state
-  // implies, and is only saved with it if the person changes it.
+  // implies, and is saved with it on the next save.
   country: countryOf(row),
 });
 // Shown when Save is pressed mid-upload, and taken down by itself once the
@@ -111,6 +111,10 @@ export default function ListingForm({initialCategory='',initialName='',sourcePos
         // Objects, not ids: the generic sort-and-compare above turns each photo
         // into "[object Object]" and would call any two galleries equal.
         if(k==='gallery'||k==='minyanim') return JSON.stringify(v)!==JSON.stringify(before[k]);
+        // Against what is stored, not what the box was filled with: a listing
+        // with no country shows the one its state implies, and leaving it
+        // there used to save nothing. What the box shows is what gets saved.
+        if(k==='country') return !same(v,provider.country);
         return !same(v,before[k]);
       }));
       // Saying "Your changes are live" over an empty patch is how a lost
