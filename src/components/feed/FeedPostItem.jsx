@@ -14,6 +14,16 @@ import { CelebrationBurst, CelebrationChoice, NewJobBanner, useCelebration } fro
 import { REACTION_BY_ID, DEFAULT_REACTION, reactionOf, topReactions } from '@/lib/reactions';
 import { timeAgo, fullDate } from '@/lib/time';
 import { isScheduled, postedAt, scheduleLabel, toLocalInput } from '@/lib/scheduledPosts';
+import { WorkStatusRing } from '@/components/WorkStatus';
+
+// The author's initials, in their photo ribbon's colour when they have one
+// on (the server adds author_work_status as it is now). Too small for the
+// ribbon's words, so just the frame.
+function AuthorAvatar({ post }) {
+  return <WorkStatusRing user={{ work_status: post.author_work_status }} thickness={5} ribbon={false} className="shrink-0">
+    <div className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-brand-tint text-sm font-bold text-brand-teal ring-2 ring-brand-surface">{(post.author_name||'KC').split(' ').map(x=>x[0]).slice(0,2).join('')}</div>
+  </WorkStatusRing>;
+}
 
 // The post a repost carries, as it was when it was reposted.
 function RepostedCard({ post }) {
@@ -110,7 +120,7 @@ function ScheduledPostItem({ post, onChanged, onDeleted }) {
       </div>
     </div>
     <div className="flex items-start gap-3">
-      <div className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-brand-tint text-sm font-bold text-brand-teal">{(post.author_name||'KC').split(' ').map(x=>x[0]).slice(0,2).join('')}</div>
+      <AuthorAvatar post={post}/>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <p className="truncate font-semibold text-brand-ink">{post.author_name||'Community member'}</p>
@@ -235,7 +245,7 @@ function LivePostItem({ post, user, onDeleted, onReposted, onChanged }) {
   return <article ref={card} className="panel relative space-y-3">
     {party&&play>0&&<CelebrationBurst key={play} kind={post.celebration} seed={`${post.id}:${play}`}/>}
     <div className="flex items-start gap-3">
-      <div className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-brand-tint text-sm font-bold text-brand-teal">{(post.author_name||'KC').split(' ').map(x=>x[0]).slice(0,2).join('')}</div>
+      <AuthorAvatar post={post}/>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <p className="truncate font-semibold text-brand-ink">{post.author_name||'Community member'}{isRepost&&<span className="font-normal text-brand-muted"> reposted</span>}</p>

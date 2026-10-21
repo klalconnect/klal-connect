@@ -355,6 +355,19 @@ ok(bookR.status === 200 && bookR.data.booking_label === 'Book an appointment', '
 const bookPublic = await call('GET', `/users/${skillOwnerId}`, { token: userB });
 ok(bookPublic.data.booking_url === 'https://calendly.com/skillowner', 'other members see the booking link', JSON.stringify(bookPublic.data.booking_url));
 
+// ---- photo ribbons ---------------------------------------------------------
+{
+  let rib = await call('PUT', '/auth/me', { token: skillOwnerTok, body: { work_status: 'king_of_the_world' } });
+  ok(rib.status === 200 && rib.data.work_status === '', 'a ribbon outside the fixed list is not saved', JSON.stringify(rib.data.work_status));
+  rib = await call('PUT', '/auth/me', { token: skillOwnerTok, body: { work_status: 'hiring' } });
+  ok(rib.data.work_status === 'hiring', 'a member can put on the Hiring ribbon');
+  const made = (await call('POST', '/functions/createPost', { token: skillOwnerTok, body: { body: 'We are hiring a bookkeeper' } })).data?.post;
+  const seenAs = async () => (await call('GET', '/entities/FeedPost?sort=-created_date', { token: userB })).data.find((p) => p.id === made?.id)?.author_work_status;
+  ok(await seenAs() === 'hiring', 'their posts show the ribbon to others');
+  await call('PUT', '/auth/me', { token: skillOwnerTok, body: { work_status: '' } });
+  ok(await seenAs() === undefined, 'taking the ribbon off takes it off their old posts too');
+}
+
 const selfEndorse = await call('POST', '/functions/toggleSkillEndorsement', { token: skillOwnerTok, body: { user_id: skillOwnerId, skill: 'Excel' } });
 ok(selfEndorse.status === 400, 'cannot endorse your own skill');
 

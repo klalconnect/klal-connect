@@ -10,7 +10,8 @@ import ProfileBanner, { PHOTO_EDGE } from '@/components/ProfileBanner';
 import HeadlineEdit from '@/components/HeadlineEdit';
 import { PROFILE_TYPES } from '@/lib/affiliations';
 import CityInput from '@/components/CityInput';
-import { WorkStatusRing, WorkStatusBadge, WorkStatusSelect } from '@/components/WorkStatus';
+import { WorkStatusRing, WorkStatusSelect } from '@/components/WorkStatus';
+import { workStatusOf } from '@/lib/workStatus';
 import { topJob } from '@/lib/connections';
 import { BOOKING_LABELS, DEFAULT_BOOKING_LABEL, bookingLabel } from '@/lib/booking';
 
@@ -99,7 +100,8 @@ export default function ProfileHeader({ user, me, editable, onSave, connections,
             ? <button type="button" onClick={() => setPreview({ url: user.avatar_url, alt: `${user.full_name || 'Profile'} profile photo` })} className="h-24 w-24 cursor-zoom-in overflow-hidden rounded-full sm:h-28 sm:w-28" style={PHOTO_EDGE} aria-label="Open profile photo"><Image src={user.avatar_url} fittingType="fill" className="h-24 w-24 sm:h-28 sm:w-28"/></button>
             : <div className="grid h-24 w-24 place-items-center rounded-full bg-brand-tint text-2xl font-bold text-brand-teal ring-4 ring-brand-surface sm:h-28 sm:w-28">{initialsOf(user)}</div>}
           </WorkStatusRing>
-          {editable && <label className="absolute -bottom-1 -right-1 grid h-9 w-9 cursor-pointer place-items-center rounded-full bg-brand-navy text-white shadow ring-2 ring-brand-surface hover:bg-brand-navy-hover" title={user.avatar_url ? 'Change photo' : 'Add a photo'}>{busy ? <Loader2 size={15} className="animate-spin"/> : <Camera size={15}/>}<input id="avatar-upload" type="file" accept="image/*" className="hidden" onChange={upload('avatar_url')} disabled={busy}/></label>}
+          {/* Up in the corner while a ribbon is on, so its tag along the bottom stays clear. */}
+          {editable && <label className={`absolute ${workStatusOf(user) ? '-top-1' : '-bottom-1'} -right-1 grid h-9 w-9 cursor-pointer place-items-center rounded-full bg-brand-navy text-white shadow ring-2 ring-brand-surface hover:bg-brand-navy-hover`} title={user.avatar_url ? 'Change photo' : 'Add a photo'}>{busy ? <Loader2 size={15} className="animate-spin"/> : <Camera size={15}/>}<input id="avatar-upload" type="file" accept="image/*" className="hidden" onChange={upload('avatar_url')} disabled={busy}/></label>}
         </div>
         <div className="flex flex-wrap items-center gap-2 pt-3">
           {editable
@@ -124,7 +126,7 @@ export default function ProfileHeader({ user, me, editable, onSave, connections,
             <label>What brings you here<select className="field" value={form.profile_type} onChange={(e) => setForm({ ...form, profile_type: e.target.value })}>{PROFILE_TYPES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}</select></label>
             <label>General home city<CityInput value={form.home_city} onChange={(v) => setForm({ ...form, home_city: v })} onPick={(p) => setForm({ ...form, home_city: p.city })} placeholder="Lakewood, Brooklyn, Monsey…"/><span className="helper">Your exact location is never displayed.</span></label>
             <label>Phone<input className="field" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} inputMode="tel"/><span className="helper">Private. Only you and the admins can see it.</span></label>
-            <label>Work status<WorkStatusSelect value={form.work_status} onChange={(v) => setForm({ ...form, work_status: v })}/><span className="helper">Shown as a badge on your profile, like LinkedIn.</span></label>
+            <label>Photo ribbon<WorkStatusSelect value={form.work_status} onChange={(v) => setForm({ ...form, work_status: v })}/><span className="helper">Shows on your profile photo, like LinkedIn's. Choose "No ribbon" to take it off.</span></label>
             <label>Booking link<input className="field" value={form.booking_url} onChange={(e) => setForm({ ...form, booking_url: e.target.value })} inputMode="url" placeholder="calendly.com/your-name"/><span className="helper">Your Calendly, Acuity or other scheduling page. Adds a button to your profile. Leave blank for no button.</span></label>
             <label>Button says<select className="field" value={form.booking_label || DEFAULT_BOOKING_LABEL} onChange={(e) => setForm({ ...form, booking_label: e.target.value })}>{BOOKING_LABELS.map((l) => <option key={l} value={l}>{l}</option>)}</select></label>
           </div>
@@ -139,7 +141,6 @@ export default function ProfileHeader({ user, me, editable, onSave, connections,
             : editable && <button type="button" onClick={startEdit} className="mt-0.5 text-sm text-brand-muted hover:text-brand-teal hover:underline">Add a one-line headline</button>}
           <div className="mt-2 flex flex-wrap items-center gap-2">
             {typeLabel && <span className="rounded-full bg-brand-tint px-2.5 py-1 text-xs font-semibold text-brand-teal">{typeLabel}</span>}
-            <WorkStatusBadge user={user}/>
           </div>
           <div className="mt-3 space-y-1 text-sm text-brand-body">
             {job && <p className="flex items-start gap-2"><Briefcase size={14} className="mt-1 shrink-0 text-brand-teal"/><span>{job.title}{job.company ? <>, {companyLink ? <Link to={companyLink} className="font-semibold text-brand-teal hover:underline">{job.company}</Link> : job.company}</> : ''}</span></p>}
