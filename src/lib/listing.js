@@ -1,4 +1,5 @@
 import { normalizeMinyanim } from './minyanim.js';
+import { normalizeKitchen } from './kitchen.js';
 
 // Who controls a listing.
 //
@@ -159,6 +160,11 @@ export function normalizeListingPatch(patch, row, { badgeById, badgeApplies, saf
   if ('logo_url' in out) out.logo_url = normalizeLogoUrl(out.logo_url);
   if ('minyanim' in out) out.minyanim = normalizeMinyanim(out.minyanim);
   const category = 'category' in out ? out.category : row?.category;
+  // Like a badge, the kitchen only means anything on a food listing.
+  if ('kitchen' in out || ('category' in out && row?.kitchen)) out.kitchen = normalizeKitchen('kitchen' in out ? out.kitchen : row?.kitchen, category);
+  // Anyone setting the kitchen by hand has answered the "check the kitchens"
+  // note the backfill left on a meat-and-dairy place.
+  if ('kitchen' in out) out.kitchen_unconfirmed = false;
   // A category change re-tests the badges already on the row, because a badge
   // only means anything next to the trade it was granted for.
   if ('badges' in out || ('category' in out && Array.isArray(row?.badges) && row.badges.length)) {

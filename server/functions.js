@@ -8,6 +8,7 @@ import { computeShabbosStatus, assertWritable as assertShabbosWritable } from '.
 import { canDeliverCodes } from './auth.js';
 import { pinForListing } from './geocode.js';
 import { normalizeMinyanim } from '../src/lib/minyanim.js';
+import { normalizeKitchen } from '../src/lib/kitchen.js';
 import { vouchesEnabled } from './settings.js';
 import { translate } from './translate.js';
 import { BADGES, badgeAppliesTo } from '../src/lib/badges.js';
@@ -133,7 +134,8 @@ function listingInput(payload) {
   const logo_url = normalizeLogoUrl(rest.logo_url);
   const minyanim = normalizeMinyanim(rest.minyanim);
   const minyan_url = safeExternalUrl(rest.minyan_url);
-  return { ...rest, badges, whatsapp, payment_link_url, gallery, logo_url, minyanim, minyan_url };
+  const kitchen = normalizeKitchen(rest.kitchen, rest.category);
+  return { ...rest, badges, whatsapp, payment_link_url, gallery, logo_url, minyanim, minyan_url, kitchen, kitchen_unconfirmed: false };
 }
 
 // A link a visitor will be sent to — a Stripe Payment Link, PayPal.me,

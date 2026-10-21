@@ -9,6 +9,7 @@ import SuggestInput from '@/components/SuggestInput';
 import CountrySelect from '@/components/CountrySelect';
 import { placeMatcher } from '@/lib/place';
 import { inCountry } from '@/lib/countries';
+import { KITCHENS, kitchenMatches, kitchenOf } from '@/lib/kitchen';
 import { lookupPlaces } from '@/lib/placeLookup';
 import { providerPath } from '@/lib/paths';
 import { readStoredCommunity, storeCommunity } from '@/lib/community';
@@ -39,6 +40,7 @@ export default function Browse() {
   const [place, setPlace] = useState(params.get('location') || (linkedPlace ? '' : readStoredCommunity()));
   const [category, setCategory] = useState(params.get('category') || '');
   const [country, setCountry] = useState(params.get('country') || '');
+  const [kitchen, setKitchen] = useState(params.get('kitchen') || '');
   const lat = Number(params.get('lat')), lng = Number(params.get('lng'));
   // "Nearest" needs a location to measure from. Without one every distance is
   // unknown, so it left the list in no order at all while claiming one.
@@ -72,7 +74,7 @@ export default function Browse() {
   // each choice would show for this search.
   const search = useMemo(() => searchDirectory(providers, { q, where: place, country }), [providers, q, place, country]);
   const scoreOf = useMemo(() => new Map(search.results.map((r) => [r.provider.id, r.score])), [search]);
-  const passes = (p) => (!verified || p.verified) && (!category || p.category === category);
+  const passes = (p) => (!verified || p.verified) && (!category || p.category === category) && kitchenMatches(p, kitchen);
 
   // With a search typed, the listings that are what was asked for come first
   // (a search for shul opens on the shuls), and the chosen sort orders each
@@ -108,7 +110,7 @@ export default function Browse() {
       other = wide.map((r) => r.provider).filter((p) => passes(p) && !seen.has(p.id));
     }
     return { results: order(hits.map(withDistance)), elsewhere: order(other.map(withDistance), otherScores), askedPlace: where };
-  }, [search, category, sort, verified, lat, lng, country]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [search, category, sort, verified, lat, lng, country, kitchen]); // eslint-disable-line react-hooks/exhaustive-deps
   // Where the results are, in words: "Boca Raton", "Israel", "Jerusalem, Israel".
   const whereText = [askedPlace, country].filter(Boolean).filter((s, i, all) => all.indexOf(s) === i).join(', ');
 
@@ -117,6 +119,9 @@ export default function Browse() {
   // results, never the whole directory.
   const scoped = useMemo(() => search.results.map((r) => r.provider).filter((p) => !verified || p.verified), [search, verified]);
   const countFor = (name) => scoped.filter((p) => p.category === name).length;
+  // The Meat / Dairy filter shows once food is in the picture: food chosen,
+  // or a search that turned up places with a kitchen label.
+  const showKitchen = !!kitchen || category === 'Food & Catering' || scoped.some((p) => kitchenOf(p) && (!category || p.category === category));
 
   // Suggestions under the keyword box count what is listed in the place being
   // searched, so they never promise results the page will not show.
@@ -127,7 +132,7 @@ export default function Browse() {
     else setQ(item.value);
   };
 
-  const isSearch = !!(q || place || category || verified || country);
+  const isSearch = !!(q || place || category || verified || country || kitchen);
 
   // Every search is recorded, not only the ones where someone clicks the
   // button — most arrive from a link with the query already in the URL. The
@@ -175,7 +180,7 @@ export default function Browse() {
   // comes with somewhere to look.
   const otherPlaces = [...new Set(elsewhere.map((p) => (p.city || '').trim()).filter(Boolean))].slice(0, 6);
 
-  const clearFilters = () => { setQ(''); choosePlace(''); setCountry(''); setCategory(''); setVerified(false); };
+  const clearFilters = () => { setQ(''); choosePlace(''); setCountry(''); setCategory(''); setVerified(false); setKitchen(''); };
 
   return <div className="page-shell py-8">
     <div className="mb-7">
@@ -204,7 +209,11 @@ export default function Browse() {
         <option value="alpha">Alphabetical</option>
       </select>
       <button onClick={clearFilters} className="secondary md:col-span-1">Clear</button>
-      <label className="flex items-center gap-2 px-2 text-sm md:col-span-12">
+      {showKitchen && <select className="field md:col-span-3" value={kitchen} onChange={(e) => setKitchen(e.target.value)} aria-label="Meat, dairy or fish">
+        <option value="">Meat, dairy or fish: any</option>
+        {KITCHENS.map((k) => <option key={k.id} value={k.id}>{k.label}</option>)}
+      </select>}
+      <label className={`flex items-center gap-2 px-2 text-sm ${showKitchen ? 'md:col-span-9' : 'md:col-span-12'}`}>
         <input type="checkbox" checked={verified} onChange={(e) => setVerified(e.target.checked)} /> Verified only
       </label>
     </div>
