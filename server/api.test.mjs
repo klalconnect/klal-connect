@@ -1121,6 +1121,16 @@ ok(!(untick.data?.verified_badges || []).includes('cholov_yisroel'),
 ok((untick.data?.verified_badges || []).includes('pas_yisroel'), 'and keeps the one it still declares', JSON.stringify(untick.data?.verified_badges));
 const moved = await call('PUT', `/entities/Provider/${kId}`, { token: ownerTok, body: { category: 'Legal' } });
 ok(!(moved.data?.verified_badges || []).length, 'a confirmed kashrus badge does not follow a listing into another trade', JSON.stringify(moved.data?.verified_badges));
+// The meat / dairy / fish label: a known kind on a food listing only.
+const grill = await call('POST', '/functions/createListing', { token: admin, body: { name: 'Kitchen Grill', category: 'Food & Catering', short_description: 'Steaks.', kitchen: 'meat' } });
+const gId = grill.data?.provider?.id;
+ok(grill.data?.provider?.kitchen === 'meat', 'a food listing keeps the kitchen it was created with', JSON.stringify(grill.data));
+const junkKitchen = await call('PUT', `/entities/Provider/${gId}`, { token: admin, body: { kitchen: 'bacon' } });
+ok(junkKitchen.data?.kitchen === '', 'an unknown kitchen is not stored', JSON.stringify(junkKitchen.data?.kitchen));
+const both = await call('PUT', `/entities/Provider/${gId}`, { token: admin, body: { kitchen: 'meat_dairy' } });
+ok(both.data?.kitchen === 'meat_dairy', 'the kitchen can be changed on an edit', JSON.stringify(both.data?.kitchen));
+const notFood = await call('PUT', `/entities/Provider/${gId}`, { token: admin, body: { category: 'Legal' } });
+ok(notFood.data?.kitchen === '', 'the kitchen label comes down when a listing leaves the food category', JSON.stringify(notFood.data?.kitchen));
 const dupes = await call('PUT', `/entities/Provider/${kId}`, { token: ownerTok, body: { service_areas: 'Boca Raton, Boca Raton, Delray Beach' } });
 ok(JSON.stringify(dupes.data?.service_areas) === JSON.stringify(['Boca Raton', 'Delray Beach']),
   'an edit does not store the same area twice', JSON.stringify(dupes.data?.service_areas));
