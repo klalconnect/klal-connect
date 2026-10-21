@@ -32,12 +32,12 @@ const escapeHtml = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', 
 export function codeEmail(purpose, code) {
   if (purpose === 'reset') {
     return {
-      subject: `${code} is your Klal password reset code`,
-      text: `Use this code to reset your Klal password:\n\n    ${code}\n\nIt expires in 10 minutes. If you did not ask to reset your password, you can ignore this email — nothing changes unless the code is used.\n\n— Klal · klalconnect.org`,
+      subject: `${code} is your Klal Connect password reset code`,
+      text: `Use this code to reset your Klal Connect password:\n\n    ${code}\n\nIt expires in 10 minutes. If you did not ask to reset your password, you can ignore this email — nothing changes unless the code is used.\n\n— Klal Connect · klalconnect.org`,
     };
   }
   return {
-    subject: `${code} is your Klal verification code`,
-    text: `Welcome to Klal. Your verification code is:\n\n    ${code}\n\nIt expires in 10 minutes.\n\n— Klal · klalconnect.org`,
+    subject: `${code} is your Klal Connect verification code`,
+    text: `Welcome to Klal Connect. Your verification code is:\n\n    ${code}\n\nIt expires in 10 minutes.\n\n— Klal Connect · klalconnect.org`,
   };
 }

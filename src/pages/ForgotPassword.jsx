@@ -42,13 +42,13 @@ export default function ForgotPassword() {
       title="Reset password"
       subtitle="We'll email you a six-digit code to reset it"
       footer={
-        <Link to="/login" className="text-primary font-medium hover:underline">
+        <Link to="/login" className="text-brand-teal font-medium hover:underline">
           <ArrowLeft className="w-3 h-3 inline mr-1" />Back to log in
         </Link>
       }
     >
       {unavailable ? (
-        <p className="text-sm text-foreground text-center">{unavailable} Please email <a className="font-semibold text-primary hover:underline" href="mailto:hello@klalconnect.org">hello@klalconnect.org</a> for help.</p>
+        <p className="text-sm text-foreground text-center">{unavailable} Please email <a className="font-semibold text-brand-teal hover:underline" href="mailto:hello@klalconnect.org">hello@klalconnect.org</a> for help.</p>
       ) : sent ? (
         <p className="text-sm text-foreground text-center">
           Check your email for the six-digit reset code.
