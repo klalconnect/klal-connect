@@ -1,4 +1,5 @@
 import { categoryLabel } from './categories.js';
+import { countryOf, US } from './countries.js';
 
 // Search aliases.
 //
@@ -291,13 +292,22 @@ export function placeSuggestions(raw, providers) {
     const city = String(p.city || '').trim();
     if (!city) continue;
     const key = city.toLowerCase();
-    const row = byCity.get(key) || { city, state: p.state || '', count: 0 };
+    // "OTHER" is the listing form's state for somewhere outside the US.
+    const state = /^other$/i.test(String(p.state || '').trim()) ? '' : String(p.state || '').trim();
+    const row = byCity.get(key) || { city, states: new Map(), country: countryOf(p), count: 0 };
     row.count += 1;
+    if (state) row.states.set(state, (row.states.get(state) || 0) + 1);
     byCity.set(key, row);
   }
+  // A city's state is the one most of its listings give: one stray "Ohio"
+  // does not move Lakewood.
+  for (const r of byCity.values()) r.state = [...r.states].sort((a, b) => b[1] - a[1])[0]?.[0] || '';
+  // A city outside the US also answers to its country: "Bah" offers Nassau.
+  const abroad = (r) => text.length >= 3 && r.country && r.country !== US && startsWord(r.country, text);
   return [...byCity.values()]
-    .filter((r) => startsWord(r.city, text) || startsWord(`${r.city} ${r.state}`, text) || startsWord(`${r.city}, ${r.state}`, text))
+    .filter((r) => startsWord(r.city, text) || startsWord(`${r.city} ${r.state}`, text) || startsWord(`${r.city}, ${r.state}`, text) || abroad(r))
     .sort((a, b) => b.count - a.count)
     .slice(0, 6)
-    .map((r) => ({ group: 'Places with listings', kind: 'place', label: r.city, value: r.city, hint: r.state, count: r.count }));
+    .map((r) => ({ group: 'Places with listings', kind: 'place', label: r.city, value: r.city,
+      hint: [r.state, r.country && r.country !== US && r.country !== r.state ? r.country : ''].filter(Boolean).join(', '), count: r.count }));
 }

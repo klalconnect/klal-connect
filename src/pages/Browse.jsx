@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '@/api/client';
-import { List, Map as MapIcon, SlidersHorizontal, MessageCircle, Plus, MapPin } from 'lucide-react';
+import { List, Map as MapIcon, SlidersHorizontal, MessageCircle, Plus, MapPin, Globe, ChevronDown } from 'lucide-react';
 import ResourceCard from '@/components/ResourceCard';
 import DirectoryMap from '@/components/DirectoryMap';
 import { searchDirectory, suggestKeywords, suggestPlaces } from '@/lib/search';
@@ -48,6 +48,7 @@ export default function Browse() {
   const [sort, setSort] = useState(located ? 'nearest' : 'used');
   const [verified, setVerified] = useState(false);
   const [view, setView] = useState('list');
+  const [showWide, setShowWide] = useState(false);
 
   useEffect(() => {
     Promise.all([api.entities.Provider.filter({ status: 'published' }), api.entities.Category.list('order')])
@@ -93,23 +94,29 @@ export default function Browse() {
   // query text altogether, so a search for a plumber with no plumbers listed
   // returned every listing in the directory while the header counted them as
   // results. A padded answer is worse than an honest "not yet".
-  const { results, elsewhere, askedPlace } = useMemo(() => {
+  //
+  // A search for a place shows what is in that place. Organizations that
+  // match only because they serve everywhere ("Nationwide", "International")
+  // are kept apart, in a folded box underneath, so the Bahamas shows the
+  // Bahamas while someone in Boca can still find Relief Resources.
+  const { results, wide, elsewhere, askedPlace } = useMemo(() => {
     const withDistance = (p) => ({
       ...p,
       distance: lat && lng && p.latitude && p.longitude ? miles(lat, lng, p.latitude, p.longitude) : null,
     });
     const where = search.parsed.place;
-    const hits = search.results.map((r) => r.provider).filter(passes);
+    const hits = search.results.filter((r) => !r.wide).map((r) => r.provider).filter(passes);
+    const anywhere = search.results.filter((r) => r.wide).map((r) => r.provider).filter(passes);
     // Same search, other communities. Shown under its own heading, never
     // mixed into the count.
     let other = [], otherScores = new Map();
     if (where) {
-      const seen = new Set(hits.map((p) => p.id));
+      const seen = new Set([...hits, ...anywhere].map((p) => p.id));
       const wide = searchDirectory(providers, { q, anywhere: true, country }).results;
       otherScores = new Map(wide.map((r) => [r.provider.id, r.score]));
       other = wide.map((r) => r.provider).filter((p) => passes(p) && !seen.has(p.id));
     }
-    return { results: order(hits.map(withDistance)), elsewhere: order(other.map(withDistance), otherScores), askedPlace: where };
+    return { results: order(hits.map(withDistance)), wide: order(anywhere.map(withDistance)), elsewhere: order(other.map(withDistance), otherScores), askedPlace: where };
   }, [search, category, sort, verified, lat, lng, country, kitchen]); // eslint-disable-line react-hooks/exhaustive-deps
   // Where the results are, in words: "Boca Raton", "Israel", "Jerusalem, Israel".
   const whereText = [askedPlace, country].filter(Boolean).filter((s, i, all) => all.indexOf(s) === i).join(', ');
@@ -286,6 +293,19 @@ export default function Browse() {
         <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[repeat(2,minmax(0,1fr))]">{elsewhere.slice(0, 6).map((p) => <ResourceCard key={p.id} provider={p} distance={p.distance} />)}</div>
       </section>}
     </div>}
+
+    {wide.length > 0 && <section className="mt-6 rounded-xl bg-brand-surface ring-1 ring-brand-line">
+      <button type="button" onClick={() => setShowWide((v) => !v)} aria-expanded={showWide}
+        className="flex w-full items-center gap-3 px-4 py-3 text-left">
+        <Globe size={18} className="shrink-0 text-brand-teal" />
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-semibold text-brand-ink">Also helps from anywhere ({wide.length})</span>
+          <span className="block text-xs text-brand-muted">Not based {whereText ? `in ${whereText}` : 'here'}. They list where they serve as nationwide or international.</span>
+        </span>
+        <ChevronDown size={18} className={`shrink-0 text-brand-muted transition ${showWide ? 'rotate-180' : ''}`} />
+      </button>
+      {showWide && <div className="grid grid-cols-[minmax(0,1fr)] gap-4 border-t border-brand-line p-4 lg:grid-cols-[repeat(2,minmax(0,1fr))]">{wide.map((p) => <ResourceCard key={p.id} provider={p} distance={p.distance} />)}</div>}
+    </section>}
 
     {providers.length === 0 && <div className="empty">
       <SlidersHorizontal />

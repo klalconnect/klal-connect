@@ -12,7 +12,7 @@
 // directory exists to answer, so it is answered in one place and shared by the
 // homepage and the search rather than written twice and allowed to drift.
 
-import { countryOf, countryName, servesWorldwide, US } from './countries.js';
+import { countryOf, countryName, countriesStarting, servesWorldwide, US } from './countries.js';
 
 // Service areas that mean "anywhere", not a place. Matched on word boundaries
 // so a city named in passing cannot trip it.
@@ -60,6 +60,13 @@ const ALIASES = {
   'five towns': { state: 'ny', cities: FIVE_TOWNS }, '5 towns': { state: 'ny', cities: FIVE_TOWNS },
 };
 
+/** A US state's full name, "Florida" for "FL" or "florida", or ''. */
+export function stateName(text) {
+  const t = norm(text);
+  const name = STATES[t] || (STATE_BY_NAME[t] ? t : '');
+  return name.replace(/\b[a-z]/g, (c) => c.toUpperCase()).replace(' Of ', ' of ');
+}
+
 /**
  * Is this text a place alias or a state? Used to spot a place typed into the
  * keyword box. A two-letter code only counts when typed in capitals ("FL",
@@ -79,16 +86,17 @@ export function isPlaceWord(text, { upper = false } = {}) {
  * A city is matched by whole words ("Boca" is Boca and Boca Raton); only when
  * no listing has such a city (while someone is still typing "Bo") does the
  * start of a city name count.
- * Listings that serve everywhere match every place. Returns null for no place.
+ * Listings that serve everywhere match every place, unless `everywhere` is
+ * false: then only listings actually in the place match. Returns null for no place.
  */
-export function placeMatcher(where, providers = null) {
+export function placeMatcher(where, providers = null, { everywhere = true } = {}) {
   const text = norm(where);
   if (!text) return null;
   // A listing that serves its whole country ("Nationwide") matches places in
   // that country only: Chai Lifeline is not in Jerusalem. One that serves the
   // whole world, or names no country, matches every place.
-  const everywhereOr = (test, countries = null) => (p) => test(p) || servesWorldwide(p) || (servesEverywhere(p)
-    && (!countries || !countryOf(p) || countries.has(countryOf(p))));
+  const everywhereOr = (test, countries = null) => (!everywhere ? test : (p) => test(p) || servesWorldwide(p) || (servesEverywhere(p)
+    && (!countries || !countryOf(p) || countries.has(countryOf(p)))));
   const inUS = new Set([US]);
   // A US state means a US listing: "WA" is not Perth, Western Australia.
   const usOk = (p) => !countryOf(p) || countryOf(p) === US;
@@ -135,9 +143,14 @@ export function placeMatcher(where, providers = null) {
     const test = (p) => exact(p) && stateOk(p);
     return everywhereOr(test, countriesOf(test));
   }
-  // Still typing: the start of a city name, at a word boundary.
+  // Still typing: the start of a city, state or country name, at a word
+  // boundary, so "Bah" already finds the Bahamas and "Flo" Florida.
   const starts = (name) => name.startsWith(city) || name.includes(` ${city}`);
-  const test = (p) => (starts(cityOf(p)) || areasOf(p).some(starts)) && stateOk(p);
+  const countries = state ? new Set() : countriesStarting(city);
+  const states = state || city.length < 3 ? new Set()
+    : new Set(Object.entries(STATES).filter(([, name]) => starts(name)).flat());
+  const test = (p) => ((starts(cityOf(p)) || areasOf(p).some(starts)) && stateOk(p))
+    || countries.has(countryOf(p)) || (states.has(stateOf(p)) && usOk(p));
   return everywhereOr(test, countriesOf(test));
 }
 
