@@ -111,9 +111,9 @@ export default function Browse() {
   // Where the results are, in words: "Boca Raton", "Israel", "Jerusalem, Israel".
   const whereText = [askedPlace, country].filter(Boolean).filter((s, i, all) => all.indexOf(s) === i).join(', ');
 
-  // Counts follow the search on screen: after searching for shul in Boca
-  // Raton, "All categories" counts those results, and each category how many
-  // of them it holds, never the whole directory.
+  // The category list shows no numbers, but a category with nothing in the
+  // search on screen (say, shul in Boca Raton) is greyed out, judged by the
+  // results, never the whole directory.
   const scoped = useMemo(() => search.results.map((r) => r.provider).filter((p) => !verified || p.verified), [search, verified]);
   const countFor = (name) => scoped.filter((p) => p.category === name).length;
 
@@ -193,7 +193,7 @@ export default function Browse() {
       <CountrySelect className="field md:col-span-2" providers={providers} value={country} onChange={chooseCountry} />
       <select className="field md:col-span-2" value={category} onChange={(e) => setCategory(e.target.value)}>
         <option value="">All categories</option>
-        {categories.map((c) => <option key={c.id} value={c.name} disabled={countFor(c.name) === 0 && c.name !== category}>{categoryLabel(c.name)} ({countFor(c.name)})</option>)}
+        {categories.map((c) => <option key={c.id} value={c.name} disabled={countFor(c.name) === 0 && c.name !== category}>{categoryLabel(c.name)}</option>)}
       </select>
       <select className="field md:col-span-2" value={sort} onChange={(e) => setSort(e.target.value)} aria-label="Sort">
         {located && <option value="nearest">Nearest</option>}
