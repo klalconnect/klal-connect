@@ -35,7 +35,7 @@ export default function VerifyEmail({ email, onVerified, devCode }) {
 
   return <AuthLayout icon={Mail} title="Check your email" subtitle={`We sent a 6-digit code to ${email}`}>
     {error && <div className="mb-4 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">{error}</div>}
-    {import.meta.env.DEV && devCode && <div className="mb-4 p-3 rounded-lg bg-primary/10 text-primary text-sm">Local dev: your code is <code className="font-mono font-bold">{devCode}</code></div>}
+    {import.meta.env.DEV && devCode && <div className="mb-4 p-3 rounded-lg bg-primary/10 text-brand-teal text-sm">Local dev: your code is <code className="font-mono font-bold">{devCode}</code></div>}
     <div className="flex justify-center mb-6">
       <InputOTP maxLength={6} value={code} onChange={setCode} autoFocus autoComplete="one-time-code">
         <InputOTPGroup>{[0, 1, 2, 3, 4, 5].map((i) => <InputOTPSlot key={i} index={i} />)}</InputOTPGroup>
@@ -46,7 +46,7 @@ export default function VerifyEmail({ email, onVerified, devCode }) {
     </Button>
     <p className="text-center text-sm text-muted-foreground mt-4">
       Didn't get it? Check spam, or{' '}
-      <button type="button" onClick={resend} className="text-primary font-medium hover:underline">send a new code</button>
+      <button type="button" onClick={resend} className="text-brand-teal font-medium hover:underline">send a new code</button>
     </p>
   </AuthLayout>;
 }

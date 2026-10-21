@@ -56,7 +56,7 @@ export default function Register() {
           Already have an account?{" "}
           <Link
             to={loginLink}
-            className="text-primary font-medium hover:underline"
+            className="text-brand-teal font-medium hover:underline"
           >
             Log in
           </Link>
@@ -64,7 +64,7 @@ export default function Register() {
       }
     >
     {reasonReport && (
-      <div className="mb-4 p-3 rounded-lg bg-primary/10 text-primary text-sm">
+      <div className="mb-4 p-3 rounded-lg bg-primary/10 text-brand-teal text-sm">
         Please log in to report an issue. Reports are private, but we require an account so our review team can follow up if needed.
       </div>
     )}

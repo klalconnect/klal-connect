@@ -73,7 +73,7 @@ export default function Login() {
           Don't have an account?{" "}
           <Link
             to={registerLink}
-            className="text-primary font-medium hover:underline"
+            className="text-brand-teal font-medium hover:underline"
           >
           Create one
           </Link>
@@ -81,7 +81,7 @@ export default function Login() {
       }
     >
       {reasonReport && (
-        <div className="mb-4 p-3 rounded-lg bg-primary/10 text-primary text-sm">
+        <div className="mb-4 p-3 rounded-lg bg-primary/10 text-brand-teal text-sm">
           Please log in to report an issue. Reports are private, but we require an account so our review team can follow up if needed.
         </div>
       )}
@@ -114,7 +114,7 @@ export default function Login() {
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <Label htmlFor="password">Password</Label>
-            <Link to="/forgot-password" className="text-xs text-primary hover:underline">
+            <Link to="/forgot-password" className="text-xs text-brand-teal hover:underline">
               Forgot password?
             </Link>
           </div>
