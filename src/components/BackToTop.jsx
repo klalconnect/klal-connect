@@ -31,6 +31,6 @@ export default function BackToTop() {
     title="Back to top"
     tabIndex={show ? 0 : -1}
     aria-hidden={!show}
-    className={`fixed bottom-[calc(5.75rem+env(safe-area-inset-bottom))] right-[max(1rem,env(safe-area-inset-right))] z-40 flex h-11 w-11 items-center justify-center rounded-full border border-brand-line bg-brand-surface/95 text-brand-ink shadow-md backdrop-blur transition-opacity duration-200 hover:text-brand-teal md:bottom-6 md:right-6 ${show ? 'opacity-100' : 'pointer-events-none opacity-0'}`}
+    className={`fixed bottom-[calc(5.75rem+env(safe-area-inset-bottom))] right-[max(1rem,env(safe-area-inset-right))] z-40 flex h-11 w-11 items-center justify-center rounded-full border border-brand-line/50 bg-brand-surface/45 text-brand-ink/80 shadow-sm backdrop-blur-sm transition-opacity duration-200 hover:text-brand-teal md:bottom-6 md:right-6 ${show ? 'opacity-100' : 'pointer-events-none opacity-0'}`}
   ><ArrowUp size={20} /></button>;
 }
