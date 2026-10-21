@@ -32,3 +32,11 @@ export function kitchenOf(provider) {
   const id = normalizeKitchen(provider?.kitchen, provider?.category);
   return id ? KITCHEN_BY_ID[id] : null;
 }
+
+// The Meat / Dairy filter. A place with both kitchens is a meat place and a
+// dairy place, so it answers to either.
+export function kitchenMatches(provider, wanted) {
+  if (!wanted) return true;
+  const id = kitchenOf(provider)?.id;
+  return id === wanted || (id === 'meat_dairy' && (wanted === 'meat' || wanted === 'dairy'));
+}

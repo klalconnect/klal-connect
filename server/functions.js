@@ -135,7 +135,7 @@ function listingInput(payload) {
   const minyanim = normalizeMinyanim(rest.minyanim);
   const minyan_url = safeExternalUrl(rest.minyan_url);
   const kitchen = normalizeKitchen(rest.kitchen, rest.category);
-  return { ...rest, badges, whatsapp, payment_link_url, gallery, logo_url, minyanim, minyan_url, kitchen };
+  return { ...rest, badges, whatsapp, payment_link_url, gallery, logo_url, minyanim, minyan_url, kitchen, kitchen_unconfirmed: false };
 }
 
 // A link a visitor will be sent to — a Stripe Payment Link, PayPal.me,
