@@ -118,6 +118,12 @@ export default function Register() {
             "Create account"
           )}
         </Button>
+        <p className="text-center text-xs text-muted-foreground">
+          By creating an account, you agree to our{" "}
+          <Link to="/terms" className="text-brand-teal font-medium hover:underline">Terms of Use</Link>
+          {" "}and{" "}
+          <Link to="/privacy" className="text-brand-teal font-medium hover:underline">Privacy policy</Link>.
+        </p>
       </form>
     </AuthLayout>
   );

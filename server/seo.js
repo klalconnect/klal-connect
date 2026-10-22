@@ -355,6 +355,27 @@ export function mountSeo(app, shell) {
     }));
   });
 
+  // The other public pages linked from the footer, indexed like the privacy
+  // policy.
+  const STATIC_PAGES = {
+    '/terms': ['Terms of use', 'The rules for using Klal Connect: listings, accuracy, claiming or removing a listing, and posting.'],
+    '/about': ['About', 'Klal Connect is a community directory and network for the frum community.'],
+    '/contact': ['Contact us', 'How to reach Klal Connect, and how to correct, claim or remove a listing.'],
+  };
+  for (const [path, [label, description]] of Object.entries(STATIC_PAGES)) {
+    app.get(path, (req, res) => {
+      const origin = siteOrigin(req);
+      send(res, renderPage(shell, { title: `${label} · ${SITE_NAME}`, description, canonical: `${origin}${path}`, image: ogFallback(origin) }));
+    });
+  }
+
+  // People type /signup; the page is /register. Permanent, with the query
+  // string kept so a returnTo survives.
+  app.get('/signup', (req, res) => {
+    const q = req.originalUrl.indexOf('?');
+    res.redirect(301, '/register' + (q === -1 ? '' : req.originalUrl.slice(q)));
+  });
+
   // Public, but only worth indexing once there is something on it. Same rule
   // as an empty directory category: followed for its links, kept out of the
   // index until it has content.
@@ -459,6 +480,9 @@ export async function sitemap(origin) {
     { loc: `${origin}/`, changefreq: 'daily', priority: '1.0' },
     { loc: `${origin}/directory`, changefreq: 'daily', priority: '0.9' },
     { loc: `${origin}/privacy`, changefreq: 'yearly', priority: '0.2' },
+    { loc: `${origin}/terms`, changefreq: 'yearly', priority: '0.2' },
+    { loc: `${origin}/about`, changefreq: 'yearly', priority: '0.3' },
+    { loc: `${origin}/contact`, changefreq: 'yearly', priority: '0.2' },
   ];
 
   // /companies is served noindex while it has nothing on it — "kept out of the
