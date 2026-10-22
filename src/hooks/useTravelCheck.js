@@ -11,9 +11,10 @@ function haversineMi(lat1, lon1, lat2, lon2){
   return 2 * EARTH_RADIUS_MI * Math.asin(Math.sqrt(a));
 }
 
-// Round to ~0.1° (~7 mi) so a re-detection of the same area keys the same
-// dismissal, but a genuinely different mismatch keys differently.
-function roundKey(lat, lon){ return `${Number(lat).toFixed(1)},${Number(lon).toFixed(1)}`; }
+// "Don't show again" is kept on the profile, so it holds on every device, and
+// in this browser too, so it holds at once even if that save fails.
+const OFF_KEY = 'kc_travel_banner_off';
+const offHere = () => { try { return localStorage.getItem(OFF_KEY) === '1'; } catch { return false; } };
 
 async function reverseGeocode(latitude, longitude){
   try{
@@ -22,76 +23,53 @@ async function reverseGeocode(latitude, longitude){
   }catch{ return { city:'', country_code:'', timezone:'' }; }
 }
 
-async function ipFallback(){
+// Where the browser says this device is, only when the member already allowed
+// it — never a permission prompt, and never a guess from the internet
+// connection. That guess is what made the banner fire for members sitting at
+// home (the admin account included): a connection resolves to its provider's
+// city, which can be anywhere, and a time zone that merely differs is not
+// travel either. Returns null when the browser cannot say.
+async function browserLocation(){
   try{
-    const d=await api.geo.ip();
-    if(!d || d.latitude==null) return null;
-    let tzid=d.timezone;
+    if(!navigator.geolocation || !navigator.permissions) return null;
+    const perm = await navigator.permissions.query({name:'geolocation'});
+    if(perm.state !== 'granted') return null;
+    const pos = await new Promise((resolve, reject)=>navigator.geolocation.getCurrentPosition(resolve, reject, { timeout:10000, maximumAge:300000 }));
+    const { latitude, longitude }=pos.coords;
+    const { city, country_code, timezone }=await reverseGeocode(latitude, longitude);
+    let tzid=timezone;
     if(!tzid){ try{ tzid=Intl.DateTimeFormat().resolvedOptions().timeZone; }catch{} }
-    return { latitude:d.latitude, longitude:d.longitude, city:d.city||'', country_code:d.country_code||'', tzid };
+    return { latitude, longitude, city, country_code, tzid };
   }catch{ return null; }
 }
 
-// Fresh location read: browser geolocation when already granted (no prompt
-// nag), otherwise IP-based geolocation. Returns null if neither is available.
-async function freshLocation(){
-  let canUseGeo = false;
-  try{
-    if(navigator.geolocation && navigator.permissions){
-      const perm = await navigator.permissions.query({name:'geolocation'});
-      canUseGeo = perm.state === 'granted';
-    } else { canUseGeo = !!navigator.geolocation; }
-  }catch{ canUseGeo = !!navigator.geolocation; }
-  if(canUseGeo){
-    try{
-      const pos = await new Promise((resolve, reject)=>navigator.geolocation.getCurrentPosition(resolve, reject, { timeout:10000, maximumAge:300000 }));
-      const { latitude, longitude }=pos.coords;
-      const { city, country_code, timezone }=await reverseGeocode(latitude, longitude);
-      let tzid=timezone;
-      if(!tzid){ try{ tzid=Intl.DateTimeFormat().resolvedOptions().timeZone; }catch{} }
-      return { latitude, longitude, city, country_code, tzid };
-    }catch{}
-  }
-  return await ipFallback();
-}
-
-// Surfaces a travel suggestion when the fresh location differs from the saved
-// profile location by >= 50 mi or a different IANA timezone. Purely
-// informational — does NOT touch the Shabbos gate, getShabbosStatus, or any
-// saved location. Dismissals are stored per-user keyed to rounded coords.
+// Offers to update the saved location when the browser's location is at least
+// 50 miles from it. Purely informational — does NOT touch the Shabbos gate,
+// getShabbosStatus, or any saved location. Dismissing it is for good.
 export function useTravelCheck(){
   const [suggestion, setSuggestion]=useState(null);
   useEffect(()=>{
     let cancelled=false;
     const run=async()=>{
       try{
-        if(!(await api.auth.hasAccount())) return;
+        if(offHere() || !(await api.auth.hasAccount())) return;
         const me=await api.auth.me();
+        if(me.guest || me.travel_banner_off) return;
         if(me.latitude==null || me.longitude==null) return; // no saved location yet — handled by the "location required" prompt
-        const fresh=await freshLocation();
-        if(cancelled || !fresh || fresh.latitude==null) return;
-        const dist=haversineMi(me.latitude, me.longitude, fresh.latitude, fresh.longitude);
-        const tzChanged = !!(me.timezone && fresh.tzid && me.timezone !== fresh.tzid);
-        if(dist < THRESHOLD_MI && !tzChanged) return;
-        const key=roundKey(fresh.latitude, fresh.longitude);
-        if((me.travel_dismissals||[]).includes(key)) return;
-        setSuggestion({ ...fresh, key });
+        const fresh=await browserLocation();
+        if(cancelled || !fresh) return;
+        if(haversineMi(me.latitude, me.longitude, fresh.latitude, fresh.longitude) < THRESHOLD_MI) return;
+        setSuggestion(fresh);
       }catch{}
     };
     run();
     const id=setInterval(run, 30*60*1000);
     return ()=>{ cancelled=true; clearInterval(id); };
   },[]);
-  const dismiss=async (key)=>{
+  const dismiss=async ()=>{
     setSuggestion(null);
-    try{
-      // Forced: a cached session can be up to the TTL old, and two
-      // dismissals inside that window would drop the first one, so the
-      // suggestion kept coming back.
-      const me=await api.auth.me({ force:true });
-      const list=me.travel_dismissals||[];
-      if(!list.includes(key)) await api.auth.updateMe({ travel_dismissals:[...list, key] });
-    }catch{}
+    try{ localStorage.setItem(OFF_KEY, '1'); }catch{}
+    try{ await api.auth.updateMe({ travel_banner_off:true }); }catch{}
   };
   return { suggestion, dismiss };
 }
