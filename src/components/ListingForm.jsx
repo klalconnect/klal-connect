@@ -204,7 +204,7 @@ export function GalleryEditor({ value = [], ownerEdit = false, onChange, onUploa
 // Jewish owned or not. Jewish owned is the default and shows nothing; only
 // "Not Jewish owned" puts a pill on the listing.
 function OwnershipPicker({ value = false, onChange }){
-  const opt=(on,label,hint)=><label key={String(on)} className={`flex cursor-pointer items-start gap-2 rounded-lg border p-3 text-sm ${value===on?'border-brand-teal bg-brand-tint':'border-brand-line'}`}><input type="radio" name="not_jewish_owned" className="mt-1" checked={value===on} onChange={()=>onChange(on)}/><span><span className="font-medium text-brand-ink">{label}</span><span className="block text-xs text-brand-muted">{hint}</span></span></label>;
+  const opt=(on,label,hint)=><label key={String(on)} className={`flex cursor-pointer items-start gap-2 rounded-lg border p-3 text-sm ${value===on?'border-brand-teal bg-brand-tint':'border-brand-line'}`}><input type="radio" name="not_jewish_owned" className="mt-1" checked={value===on} onChange={()=>onChange(on)}/><span><span className="font-medium text-brand-ink">{label}</span><span className="block text-xs text-brand-body">{hint}</span></span></label>;
   return <fieldset className="rounded-lg border border-brand-line p-4">
     <legend className="px-1 text-sm font-semibold text-brand-ink">Ownership</legend>
     <p className="helper mt-0">Is this business Jewish owned?</p>
