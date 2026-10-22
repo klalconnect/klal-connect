@@ -214,6 +214,7 @@ password unless `KC_DEMO_PASSWORD` is set; give it a real one with
    | --- | --- |
    | `DATABASE_URL` | Supabase **Transaction pooler** string, port **6543** — not the direct connection, which is IPv6-only and exhausts its connection budget under serverless. Remove any `?sslmode=` (TLS is configured in code, with Supabase's root CA in `server/certs/` trusted alongside the system roots). |
    | `BLOB_READ_WRITE_TOKEN` | Set by attaching a Vercel Blob store — uploads go there. Or `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` for Supabase Storage. |
+   | `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`, `R2_PUBLIC_URL` | Cloudflare R2 for videos in feed posts (server/video.js). Without them there is no video button. The bucket needs a CORS rule allowing `PUT` from the site's origin with the `Content-Type` header. |
    | `KC_JWT_SECRET` | A long random string. The server refuses to boot in production without it. |
    | `KC_GEOCODER` / `KC_GEOCODER_KEY` | `google` and a key restricted to the Geocoding API (or `mapbox` and a token) |
    | `GOOGLE_MAPS_BROWSER_KEY` | A *separate* key restricted to the site's referrers and the Maps JavaScript API. Without it the map falls back to OpenStreetMap tiles. |

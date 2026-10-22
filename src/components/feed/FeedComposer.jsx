@@ -1,6 +1,6 @@
-import React,{useState} from 'react';
+import React,{useState,useEffect} from 'react';
 import { api } from '@/api/client';
-import { ImagePlus, Send, Linkedin, X, CalendarClock, Briefcase } from 'lucide-react';
+import { ImagePlus, Send, Linkedin, X, CalendarClock, Briefcase, Video } from 'lucide-react';
 import Headline from '@/components/Headline';
 import { AccountButtons } from '@/components/GuestPrompt';
 import { POST_TYPES, POST_TYPE_BY_ID } from '@/lib/postTypes';
@@ -10,6 +10,7 @@ import { isScheduled, scheduleLabel, toLocalInput } from '@/lib/scheduledPosts';
 import { Link } from 'react-router-dom';
 import { DEFAULT_CELEBRATION, JOB_FIELD_MAX, thisMonth, canAnnounce, announceFromLabel } from '@/lib/celebrations';
 import { CelebrationBurst, CelebrationChoice, AnnounceChoice } from '@/components/feed/Celebration';
+import { videoSeconds, videoSrc } from '@/lib/media';
 
 // Where the time box starts when scheduling is opened: tomorrow at 9 AM, or
 // Sunday when tomorrow is Shabbos.
@@ -37,16 +38,35 @@ export default function FeedComposer({ onPosted, user, initialBody = '', initial
   // A job from before the site opened goes on the profile only.
   const oldJob=newJob&&!canAnnounce(job.start);
   const profileOnly=newJob&&(!announce||oldJob);
-  const ready=newJob?!!(job.title.trim()||job.company.trim())&&!!job.start:!!body.trim();
+  // One video per post, sent straight to video storage as soon as it is
+  // picked, so posting does not wait on it. Progress is a percentage while it
+  // goes. The button only shows while video storage is set up and the admin
+  // switch is on (Admin → Site switches).
+  const [video,setVideo]=useState(''),[videoPct,setVideoPct]=useState(null),[videoCfg,setVideoCfg]=useState(null);
+  useEffect(()=>{ let alive=true; api.getConfig().then(c=>{ if(alive&&c.videosEnabled) setVideoCfg({mb:c.videoMaxMb||100,seconds:c.videoMaxSeconds||60}); }); return()=>{ alive=false; }; },[]);
+  const ready=newJob?!!(job.title.trim()||job.company.trim())&&!!job.start:!!body.trim()||imgs.length>0||!!video;
   const [open,setOpen]=useState(()=>!!initialBody||typeof window==='undefined'||window.innerWidth>=640);
   const upload=async e=>{
     setUploading(true);
     const {file_url}=await api.integrations.Core.UploadFile({file:e.target.files[0]});
     setImgs(i=>[...i,file_url]); setUploading(false);
   };
+  const pickVideo=async e=>{
+    const file=e.target.files[0]; e.target.value='';
+    if(!file||!videoCfg)return;
+    setErr('');
+    if(!/^video\/(mp4|quicktime|webm)$/.test(file.type)){ setErr('Please choose an MP4, MOV or WebM video.'); return; }
+    if(file.size>videoCfg.mb*1024*1024){ setErr(`Videos can be up to ${videoCfg.mb}MB. Try a shorter one.`); return; }
+    const secs=await videoSeconds(file);
+    if(secs&&secs>videoCfg.seconds+1){ setErr(`Videos can be up to ${videoCfg.seconds} seconds. This one is ${Math.round(secs)}.`); return; }
+    setVideoPct(0);
+    try{ const {file_url}=await api.integrations.Core.UploadVideo({file,onProgress:setVideoPct}); setVideo(file_url); }
+    catch(x){ setErr(x.message||'The video did not upload. Please try again.'); }
+    finally{ setVideoPct(null); }
+  };
   const submit=async e=>{
     e.preventDefault();
-    if(!ready)return;
+    if(!ready||videoPct!==null)return;
     if(!(await api.auth.requireAccount()))return;
     const jobFields=newJob?{job_title:job.title,job_company:job.company,job_start:job.start}:{};
     // Not announced: it goes on the profile and nowhere else.
@@ -64,10 +84,10 @@ export default function FeedComposer({ onPosted, user, initialBody = '', initial
     const publish_at=when?new Date(when).toISOString():undefined;
     if(when&&Number.isNaN(new Date(when).getTime())){ setErr('Pick a date and time for your post.'); return; }
     setBusy(true);
-    const r=await api.functions.invoke('createPost',{body,post_type:type,image_urls:imgs,publish_at,...jobFields,...(newJob?{celebration}:{})});
+    const r=await api.functions.invoke('createPost',{body,post_type:type,image_urls:imgs,video_url:video||undefined,publish_at,...jobFields,...(newJob?{celebration}:{})});
     if(r.status>=400){ setErr(r.data?.error||'Could not post'); setBusy(false); return; }
     markEngaged();
-    setErr(''); setBody(''); setImgs([]); setWhen(''); setJob(blankJob()); setCelebration(DEFAULT_CELEBRATION); setBusy(false); setAddedToProfile(false); setPosted(r.data?.post||null);
+    setErr(''); setBody(''); setImgs([]); setVideo(''); setWhen(''); setJob(blankJob()); setCelebration(DEFAULT_CELEBRATION); setBusy(false); setAddedToProfile(false); setPosted(r.data?.post||null);
     if(window.innerWidth<640) setOpen(false);
     onPosted?.();
   };
@@ -136,14 +156,20 @@ export default function FeedComposer({ onPosted, user, initialBody = '', initial
       </div>
       <p className="text-xs text-brand-muted">In your time zone. Only you can see it until then, and you can change or cancel it anytime.</p>
     </div>}
+    {video&&!profileOnly&&<div className="relative w-fit max-w-full sm:ml-14">
+      <video src={videoSrc(video)} controls playsInline preload="metadata" className="max-h-64 max-w-full rounded-lg bg-black ring-1 ring-brand-line"/>
+      <button type="button" onClick={()=>setVideo('')} aria-label="Remove video" className="absolute right-1.5 top-1.5 grid h-7 w-7 place-items-center rounded-full bg-black/60 text-white"><X size={15}/></button>
+    </div>}
     {imgs.length>0&&!profileOnly&&<div className="flex gap-2 sm:pl-14">{imgs.map(u=><img key={u} src={u} className="h-16 w-16 rounded-lg object-cover"/>)}</div>}
     <div className="flex items-center justify-between sm:pl-14">
       <div className={`flex items-center gap-2 ${profileOnly?'invisible':''}`}>
         <label className="icon-button cursor-pointer" aria-label="Add a photo"><ImagePlus size={18}/><input type="file" accept="image/*" onChange={upload} className="hidden"/></label>
+        {videoCfg&&!video&&<label className={`icon-button ${videoPct!==null?'pointer-events-none opacity-50':'cursor-pointer'}`} aria-label="Add a video" title={`Add a video (up to ${videoCfg.seconds} seconds)`}><Video size={18}/><input type="file" accept="video/mp4,video/quicktime,video/webm" onChange={pickVideo} className="hidden"/></label>}
         <button type="button" onClick={()=>{ setErr(''); setWhen(w=>w?'':defaultScheduleTime()); }} aria-pressed={!!when} aria-label="Schedule for later" title="Schedule for later" className={`icon-button ${when?'bg-brand-tint text-brand-teal':''}`}><CalendarClock size={18}/></button>
         {uploading&&<span className="text-xs text-brand-body">Uploading…</span>}
+        {videoPct!==null&&<span className="text-xs text-brand-body">Uploading video {videoPct}%</span>}
       </div>
-      <div className="flex items-center gap-2">{err&&<span className="text-xs font-semibold text-brand-error">{err}</span>}<button type="button" onClick={()=>{setOpen(false);setBody('');setWhen('');}} className="text-xs font-medium text-brand-muted hover:text-brand-ink sm:hidden">Cancel</button><button disabled={busy||!ready} className="primary">{profileOnly?<Briefcase size={15}/>:when?<CalendarClock size={15}/>:<Send size={15}/>}{profileOnly?'Add to my profile':when?'Schedule':type==='question'?'Ask':newJob?'Announce':'Post'}</button></div>
+      <div className="flex items-center gap-2">{err&&<span className="text-xs font-semibold text-brand-error">{err}</span>}<button type="button" onClick={()=>{setOpen(false);setBody('');setWhen('');}} className="text-xs font-medium text-brand-muted hover:text-brand-ink sm:hidden">Cancel</button><button disabled={busy||!ready||videoPct!==null} className="primary">{profileOnly?<Briefcase size={15}/>:when?<CalendarClock size={15}/>:<Send size={15}/>}{profileOnly?'Add to my profile':when?'Schedule':type==='question'?'Ask':newJob?'Announce':'Post'}</button></div>
     </div>
   </form></>;
 }

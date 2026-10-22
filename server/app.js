@@ -13,7 +13,7 @@ import {
   attachUser, requireAuth, requireAdmin,
   hashPassword, checkPassword, signToken, deliverCode, canDeliverCodes,
 } from './auth.js';
-import { functions, publicFunctions, safeExternalUrl, findInviteByCode } from './functions.js';
+import { functions, publicFunctions, safeExternalUrl, findInviteByCode, assertWritable } from './functions.js';
 import { ADMIN_ONLY_LISTING_FIELDS } from '../src/lib/trust.js';
 import { BADGE_BY_ID, badgeAppliesTo } from '../src/lib/badges.js';
 import { isSensitiveListing } from '../src/lib/sensitivity.js';
@@ -31,7 +31,8 @@ import { translateEnabled, LANGUAGES as TRANSLATE_LANGUAGES } from './translate.
 import { put as putFile, usingObjectStorage, UPLOAD_DIR } from './storage.js';
 import { mountSeo, sitemap, robots, siteOrigin } from './seo.js';
 import { healthReport } from './health.js';
-import { vouchesEnabled, forgetSettings } from './settings.js';
+import { vouchesEnabled, videosSwitchOn, forgetSettings } from './settings.js';
+import { videoUploadLink, videoStorageReady, VIDEO_MAX_MB, VIDEO_MAX_SECONDS } from './video.js';
 
 // The built index.html, baked in at build time by scripts/emit-shell.mjs.
 // Absent in dev and in tests, where Vite serves the shell itself.
@@ -822,6 +823,12 @@ app.get('/api/config', async (_req, res) => res.json({
   translateLanguages: TRANSLATE_LANGUAGES,
   // The admin switch for vouches and community notes (server/settings.js).
   vouchesEnabled: await vouchesEnabled(),
+  // Video in feed posts: needs R2 set up (server/video.js) and the admin
+  // switch on. videoStorage alone tells the admin page whether setup is done.
+  videoStorage: videoStorageReady(),
+  videosEnabled: videoStorageReady() && await videosSwitchOn(),
+  videoMaxMb: VIDEO_MAX_MB,
+  videoMaxSeconds: VIDEO_MAX_SECONDS,
 }));
 
 // Issues a session for the shared guest account so a visitor can browse the
@@ -1160,6 +1167,15 @@ app.post('/api/upload', requireAuth, upload.single('file'), async (req, res, nex
   try {
     if (!req.file) return res.status(400).json({ error: `Please choose an image file under ${MAX_UPLOAD_MB}MB.` });
     res.json({ file_url: await putFile(req.file.buffer, req.file.mimetype) });
+  } catch (err) { next(err); }
+});
+
+// Videos go straight from the browser to R2; this only hands out the link.
+app.post('/api/upload/video-link', requireAuth, async (req, res, next) => {
+  try {
+    await assertWritable(req.user);
+    if (!(await videosSwitchOn())) return res.status(403).json({ error: 'Video uploads are turned off right now.' });
+    res.json(videoUploadLink(req.body || {}));
   } catch (err) { next(err); }
 });
 

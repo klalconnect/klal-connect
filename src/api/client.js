@@ -3,6 +3,8 @@
 // One object — entities / auth / functions / integrations — is the app's entire
 // interface to the server. Components import `api` and never touch fetch, so
 // auth headers, error shapes and the token live in exactly one place.
+import { shrinkImage, putWithProgress } from '@/lib/media';
+
 const TOKEN_KEY = 'kc_access_token';
 const API = '/api';
 
@@ -349,8 +351,15 @@ const integrations = {
   Core: {
     async UploadFile({ file }) {
       const form = new FormData();
-      form.append('file', file);
+      form.append('file', await shrinkImage(file));
       return request('POST', '/upload', { body: form, raw: true });
+    },
+    // The server signs a link and the file goes straight to video storage;
+    // see server/video.js for why it does not pass through the API.
+    async UploadVideo({ file, onProgress }) {
+      const { upload_url, file_url } = await request('POST', '/upload/video-link', { body: { content_type: file.type, size: file.size } });
+      await putWithProgress(upload_url, file, onProgress);
+      return { file_url };
     },
   },
 };

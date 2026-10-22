@@ -10,6 +10,7 @@ import { pinForListing, tzFor } from './geocode.js';
 import { normalizeMinyanim } from '../src/lib/minyanim.js';
 import { normalizeKitchen } from '../src/lib/kitchen.js';
 import { vouchesEnabled } from './settings.js';
+import { isOurVideo, deleteVideo } from './video.js';
 import { translate } from './translate.js';
 import { BADGES, badgeAppliesTo } from '../src/lib/badges.js';
 import { isSensitiveListing } from '../src/lib/sensitivity.js';
@@ -36,7 +37,7 @@ function assertVerified(user) {
   }
 }
 
-async function assertWritable(user, now) {
+export async function assertWritable(user, now) {
   assertVerified(user);
   await assertShabbosWritable(user, now);
 }
@@ -590,14 +591,17 @@ export const functions = {
 
   // ---- feed -----------------------------------------------------------------
 
-  async createPost({ body, post_type, image_urls, publish_at, job_title, job_company, job_start, celebration }, user) {
+  async createPost({ body, post_type, image_urls, video_url, publish_at, job_title, job_company, job_start, celebration }, user) {
     await assertWritable(user);
     const text = String(body || '').trim();
     const kind = postType(post_type);
     // A new-job post says what it is on its card, so its words are optional.
     const job = kind === 'new_job' ? newJobInput({ job_title, job_company, job_start }) : null;
     if (job && !canAnnounce(job.start)) fail('Only jobs that started since Klal Connect opened can be announced. Add this one to your profile instead.');
-    if (!text && !(image_urls || []).length && !job) fail('Write something to post.');
+    // Only a video uploaded through our own link: anything else would let a
+    // post play a file from anywhere on the web.
+    if (video_url && !isOurVideo(video_url)) fail('That video could not be added. Please upload it again.');
+    if (!text && !(image_urls || []).length && !video_url && !job) fail('Write something to post.');
     if (text.length > 5000) fail('Posts must be 5000 characters or fewer.');
     const when = await scheduleTime(publish_at, user);
     const post = await store.create(
@@ -607,6 +611,7 @@ export const functions = {
         post_type: kind,
         ...(job ? { job_title: job.title, job_company: job.company, job_start: job.start, celebration: celebrationOf(celebration) } : {}),
         image_urls: image_urls || [],
+        ...(video_url ? { video_url } : {}),
         ...(when ? { publish_at: when } : {}),
         like_count: 0,
         comment_count: 0,
@@ -638,7 +643,7 @@ export const functions = {
     const patch = {};
     if (body !== undefined) {
       const text = String(body || '').trim();
-      if (!text && !(post.image_urls || []).length) fail('Write something to post.');
+      if (!text && !(post.image_urls || []).length && !post.video_url) fail('Write something to post.');
       if (text.length > 5000) fail('Posts must be 5000 characters or fewer.');
       patch.body = text;
     }
@@ -690,6 +695,7 @@ export const functions = {
         repost_author_headline: original.author_headline || '',
         repost_body: original.body || '',
         repost_image_urls: original.image_urls || [],
+        ...(original.video_url ? { repost_video_url: original.video_url } : {}),
         repost_post_type: original.post_type || 'post',
         repost_created_date: original.publish_at || original.created_date || '',
         ...authorFields(user),
@@ -1019,7 +1025,7 @@ export const functions = {
     const top_posts = posts
       .map((p) => ({
         id: p.id,
-        excerpt: postExcerpt(p.body || p.repost_body, 90) || (p.image_urls?.length ? 'Photo post' : 'Post'),
+        excerpt: postExcerpt(p.body || p.repost_body, 90) || (p.video_url ? 'Video post' : p.image_urls?.length ? 'Photo post' : 'Post'),
         created_date: p.publish_at || p.created_date,
         impressions: seen.get(p.id) || 0,
         reactions: liked.get(p.id) || 0,
@@ -1106,11 +1112,14 @@ export const functions = {
       await store.delete('FeedPost', id);
     };
     await removeWithEverything(post_id);
+    // A repost only carries a copy of the address, so the file goes with the
+    // post that uploaded it.
+    if (post.video_url) await deleteVideo(post.video_url);
     // Reposts of it keep their own words but no longer carry its copy; a bare
     // repost has nothing left to show and goes too.
     for (const repost of await store.filter('FeedPost', { repost_of: post_id })) {
       if (!String(repost.body || '').trim()) { await removeWithEverything(repost.id); continue; }
-      await store.update('FeedPost', repost.id, { repost_removed: true, repost_body: '', repost_image_urls: [], repost_author_name: '', repost_author_headline: '' });
+      await store.update('FeedPost', repost.id, { repost_removed: true, repost_body: '', repost_image_urls: [], repost_video_url: '', repost_author_name: '', repost_author_headline: '' });
     }
     if (post.repost_of) {
       const original = await store.get('FeedPost', post.repost_of);
