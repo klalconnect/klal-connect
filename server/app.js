@@ -1096,7 +1096,9 @@ app.post('/api/auth/reset-password-request', async (req, res, next) => {
 });
 
 app.post('/api/auth/reset-password', async (req, res, next) => {
-  const { email, resetToken, newPassword } = req.body || {};
+  const { resetToken, newPassword } = req.body || {};
+  const email = normalizeEmail(req.body?.email);
+  if (!email) return res.status(400).json({ error: 'Enter the email address the reset code was sent to' });
   if (String(newPassword || '').length < 8) {
     return res.status(400).json({ error: 'Password must be at least 8 characters' });
   }
