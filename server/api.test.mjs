@@ -88,6 +88,19 @@ const login2 = await call('POST', '/auth/login', { body: { email, password: 'pas
 ok(login2.status === 200 && login2.data.access_token, 'login works once verified');
 const userA = login2.data.access_token, idA = login2.data.user.id;
 
+// ---- password reset ---------------------------------------------------------
+// The reset page once posted only the code and the new password, so every
+// real code came back "incorrect or has expired". The code is filed under
+// the address, and without it there is nothing to match.
+const resetReq = await call('POST', '/auth/reset-password-request', { body: { email } });
+ok(resetReq.status === 200 && resetReq.data.dev_code, 'reset request sends a code', JSON.stringify(resetReq.data));
+const noEmail = await call('POST', '/auth/reset-password', { body: { resetToken: resetReq.data.dev_code, newPassword: 'newpassword1' } });
+ok(noEmail.status === 400 && /email/i.test(noEmail.data.error), 'reset without an email asks for it', JSON.stringify(noEmail.data));
+const resetOk = await call('POST', '/auth/reset-password', { body: { email: ` ${email.toUpperCase()} `, resetToken: resetReq.data.dev_code, newPassword: 'newpassword1' } });
+ok(resetOk.status === 200, 'reset with the emailed code works, whatever the case of the address', JSON.stringify(resetOk.data));
+const loginNew = await call('POST', '/auth/login', { body: { email, password: 'newpassword1' } });
+ok(loginNew.status === 200, 'new password signs in');
+
 // ---- reactions ------------------------------------------------------------
 await call('PUT', '/auth/me', { token: userA, body: { full_name: 'Tester A' } });
 const post = (await call('POST', '/functions/createPost', { token: userA, body: { body: 'hello', post_type: 'update' } })).data.post;

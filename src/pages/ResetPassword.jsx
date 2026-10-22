@@ -31,7 +31,7 @@ export default function ResetPassword() {
     }
     setLoading(true);
     try {
-      await api.auth.resetPassword({ resetToken, newPassword });
+      await api.auth.resetPassword({ email: email.trim(), resetToken, newPassword });
       window.location.href = "/login";
     } catch (err) {
       setError(err.message || "Failed to reset password");
