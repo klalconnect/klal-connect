@@ -20,16 +20,40 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           CHECKED_SHA: ${{ github.event.workflow_run.head_sha }}
+          # GitHub names the PR in the event itself; the commit lookup below is
+          # only the fallback when it does not.
+          EVENT_PR: ${{ github.event.workflow_run.pull_requests[0].number }}
         run: |
           set -euo pipefail
-          PULL_REQUESTS="$(gh api "repos/$GITHUB_REPOSITORY/commits/$CHECKED_SHA/pulls")"
-          PR_NUMBER="$(jq -r --arg sha "$CHECKED_SHA" '[.[] | select(.user.login == "eliepstein0817" and .base.ref == "main" and .state == "open" and .draft == false and .head.sha == $sha)][0].number // empty' <<< "$PULL_REQUESTS")"
+          # GitHub's API sometimes answers with an empty body (seen as
+          # "unexpected end of JSON input"), and a merge right after another
+          # one can be refused with "Base branch was modified". Both clear on
+          # a retry, so every call gets a few tries and says what went wrong.
+          api() {
+            local out err i
+            err="$(mktemp)"
+            for i in 1 2 3 4 5; do
+              if out="$(gh api "$@" 2>"$err")" && [ -n "$out" ] && jq -e . >/dev/null 2>&1 <<< "$out"; then
+                printf '%s' "$out"
+                return 0
+              fi
+              echo "gh api $* (try $i) did not answer: $(cat "$err")" >&2
+              sleep $((i * 5))
+            done
+            return 1
+          }
+
+          PR_NUMBER="$EVENT_PR"
+          if ! [[ "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
+            PULL_REQUESTS="$(api "repos/$GITHUB_REPOSITORY/commits/$CHECKED_SHA/pulls")"
+            PR_NUMBER="$(jq -r --arg sha "$CHECKED_SHA" '[.[] | select(.user.login == "eliepstein0817" and .base.ref == "main" and .state == "open" and .draft == false and .head.sha == $sha)][0].number // empty' <<< "$PULL_REQUESTS")"
+          fi
           if ! [[ "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
             echo "The successful pull request run has no associated open pull request; nothing to merge."
             exit 0
           fi
 
-          PR="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER")"
+          PR="$(api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER")"
           AUTHOR="$(jq -r '.user.login' <<< "$PR")"
           BASE_BRANCH="$(jq -r '.base.ref' <<< "$PR")"
           PR_STATE="$(jq -r '.state' <<< "$PR")"
@@ -40,14 +64,20 @@ jobs:
             exit 0
           fi
 
-          MERGE="$(gh api --method PUT "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/merge" \
+          # A merge whose answer got lost may still have gone through, so ask
+          # the PR before calling it a failure.
+          if MERGE="$(api --method PUT "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/merge" \
             -f sha="$CHECKED_SHA" \
-            -f merge_method=squash)"
-          if [ "$(jq -r '.merged' <<< "$MERGE")" != "true" ]; then
-            echo "::error title=Pull request not merged::GitHub did not confirm the merge."
-            exit 1
+            -f merge_method=squash)" && [ "$(jq -r '.merged' <<< "$MERGE")" = "true" ]; then
+            MERGED_SHA="$(jq -r '.sha' <<< "$MERGE")"
+          else
+            AFTER="$(api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER")"
+            if [ "$(jq -r '.merged' <<< "$AFTER")" != "true" ]; then
+              echo "::error title=Pull request not merged::GitHub did not confirm the merge of #$PR_NUMBER."
+              exit 1
+            fi
+            MERGED_SHA="$(jq -r '.merge_commit_sha' <<< "$AFTER")"
           fi
-          MERGED_SHA="$(jq -r '.sha' <<< "$MERGE")"
           echo "Merged Eli's checked PR #$PR_NUMBER as $MERGED_SHA."
 
           # No checkout in this job, so gh cannot read the repository from git.
