@@ -1177,17 +1177,18 @@ if (!usingObjectStorage) {
 
 // ------------------------------------------------------------- geocoding --
 
-// Signed-in only: an open geocoding proxy would let anyone burn the app's
-// provider quota, and every caller in the app is already authenticated.
-app.get('/api/geo/reverse', requireAuth, async (req, res, next) => {
+// Open to signed-out visitors too, who pick their community before they have
+// an account. They are answered offline only (the curated communities and the
+// bundled world list), so an open endpoint cannot burn the provider's quota.
+app.get('/api/geo/reverse', async (req, res, next) => {
   try {
-    res.json(await reverseGeocode(req.query.lat, req.query.lon));
+    res.json(await reverseGeocode(req.query.lat, req.query.lon, { offline: !req.user || isGuest(req.user) }));
   } catch (err) { next(err); }
 });
 
-app.get('/api/geo/search', requireAuth, async (req, res, next) => {
+app.get('/api/geo/search', async (req, res, next) => {
   try {
-    res.json(await searchPlaces(req.query.q, req.query.limit));
+    res.json(await searchPlaces(req.query.q, req.query.limit, { offline: !req.user || isGuest(req.user) }));
   } catch (err) { next(err); }
 });
 

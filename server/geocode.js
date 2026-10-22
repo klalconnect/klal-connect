@@ -16,6 +16,7 @@ import tzLookup from 'tz-lookup';
 import { geoCache } from './db.js';
 
 import { findPlaces, nearestPlace, placeLabel, distanceKm } from './places.js';
+import { findTowns, nearestTown } from './worldCities.js';
 
 const PROVIDER = (process.env.KC_GEOCODER || 'nominatim').toLowerCase();
 const API_KEY = process.env.KC_GEOCODER_KEY || '';
@@ -296,6 +297,16 @@ function activeProvider() {
   return providers[PROVIDER];
 }
 
+// "Jerusalem, IL" reads as Illinois to anyone in America, so outside the US
+// the country is spelled out: "Jerusalem, Israel", "Gateshead, NSW, Australia".
+const countryNames = (() => { try { return new Intl.DisplayNames(['en'], { type: 'region' }); } catch { return null; } })();
+function readableLabel(p) {
+  if (p.country_code === 'US') return placeLabel(p);
+  let country = p.country_code;
+  try { country = countryNames?.of(p.country_code) || country; } catch { /* unknown code */ }
+  return [p.city, p.region, country].filter(Boolean).join(', ');
+}
+
 // The curated list of communities, in the shape the rest of the app expects.
 const fromPlace = (p) => ({
   latitude: p.latitude,
@@ -305,10 +316,27 @@ const fromPlace = (p) => ({
   region: p.region || '',
   country_code: p.country_code,
   timezone: tzFor(p.latitude, p.longitude),
-  label: placeLabel(p),
+  label: readableLabel(p),
   source: 'klal',
   precise: false,
 });
+
+// A town from the bundled world list (./worldCities.js), in the same shape.
+const fromTown = (t) => ({ ...fromPlace(t), source: 'world' });
+
+// The curated communities first, then any other town in the world whose name
+// starts with what was typed. Both answer without a key or a request.
+async function knownPlaces(q, limit) {
+  const local = findPlaces(q, limit).map(fromPlace);
+  if (local.length >= limit) return local;
+  const towns = await findTowns(q, limit);
+  // "Lakewood CO" names its state, so that Lakewood beats the curated one in
+  // New Jersey that merely shares the name. Where the named town is a curated
+  // community anyway ("lakewood nj"), the curated entry keeps its place.
+  const named = towns.filter((t) => t.qualified).map((t) =>
+    local.find((p) => distanceKm(p.latitude, p.longitude, t.latitude, t.longitude) < 10) || fromTown(t));
+  return dedupePlaces([...named, ...local, ...towns.map(fromTown)], limit);
+}
 
 // "1880 Ocean Ave, Brooklyn" — a house number then a word. Such a query must
 // reach the provider even when the curated list already named the town.
@@ -362,7 +390,7 @@ async function censusSearch(q, limit) {
 
 const isFiniteNum = (n) => Number.isFinite(Number(n));
 
-export async function reverseGeocode(lat, lon) {
+export async function reverseGeocode(lat, lon, { offline = false } = {}) {
   if (!isFiniteNum(lat) || !isFiniteNum(lon)) throw new GeoError('Invalid coordinates.', 400);
   const latitude = Number(lat);
   const longitude = Number(lon);
@@ -375,7 +403,10 @@ export async function reverseGeocode(lat, lon) {
   // technically falls in.
   const known = nearestPlace(latitude, longitude);
   if (known) return { ...fromPlace(known), latitude, longitude, timezone: tzFor(latitude, longitude) };
-  if (!providerUsable()) {
+  if (!providerUsable() || offline) {
+    // Still a name for the point when a town in the world list is close.
+    const town = await nearestTown(latitude, longitude);
+    if (town) return { ...fromTown(town), latitude, longitude, timezone: tzFor(latitude, longitude) };
     // No provider and nowhere we recognise — but the time zone comes from the
     // coordinates offline, and that is the part zmanim need. An unnamed
     // location with the right zone beats an error that leaves the app with no
@@ -402,6 +433,8 @@ export async function reverseGeocode(lat, lon) {
     // the right zone beats an error that leaves the app with no candle-lighting
     // time at all. A provider that is configured but failing — a quota, a 429,
     // an outage — is the same situation, and was not handled.
+    const town = await nearestTown(latitude, longitude);
+    if (town) return { ...fromTown(town), latitude, longitude, timezone: tzFor(latitude, longitude) };
     const timezone = tzFor(latitude, longitude);
     if (timezone) return { latitude, longitude, city: '', country_code: '', timezone, label: '', source: 'coordinates' };
     throw err;
@@ -410,21 +443,22 @@ export async function reverseGeocode(lat, lon) {
   return result;
 }
 
-export async function searchPlaces(query, limit = 8) {
+// `offline` answers only from the lists shipped with the app: what a signed-out
+// visitor gets, since nobody can spend a provider's quota that way.
+export async function searchPlaces(query, limit = 8, { offline = false } = {}) {
   const q = String(query || '').trim();
   if (q.length < 2) throw new GeoError('Enter at least two characters.', 400);
   const capped = Math.min(Math.max(Number(limit) || 8, 1), 10);
 
-  // The communities Klal serves answer first, instantly and without a key.
-  // A provider only sees what is left — a street address, a town nobody
-  // listed — and if there is no usable provider, the known places are still
-  // an answer rather than a 503.
-  const local = findPlaces(q, capped).map(fromPlace);
+  // The communities Klal serves answer first, then every other town in the
+  // world, instantly and without a key. A provider only sees what is left — a
+  // street address, a village too small for the list — and if there is no
+  // usable provider, the known places are still an answer rather than a 503.
+  const local = await knownPlaces(q, capped);
   const address = looksLikeAddress(q);
-  if (!address && (local.length >= capped || !providerUsable())) {
-    if (local.length) return local;
-    throw new GeoError(LOCATION_UNAVAILABLE, 503);
-  }
+  // Nothing found here is an answer too: the whole world list was asked, so
+  // "not on our list" is true, where "cannot reach the lookup" was not.
+  if (offline || (!address && (local.length >= capped || !providerUsable()))) return local;
 
   let results = [];
   let failure = null;
@@ -462,8 +496,10 @@ export async function searchPlaces(query, limit = 8) {
   }
 
   if (!results.length) {
-    if (local.length) return local;
-    throw failure || new GeoError(LOCATION_UNAVAILABLE, 503);
+    // Only a street address is worth reporting a failing provider for; a town
+    // name was already looked up in the world list.
+    if (local.length || !address || !failure) return local;
+    throw failure;
   }
   return mergePlaces(local, results, capped);
 }
