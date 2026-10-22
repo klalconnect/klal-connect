@@ -95,7 +95,7 @@ export default function SearchPanel({ defaultLocation = '', autoFocus = false })
       <Search className="text-brand-teal" />
       <SuggestInput wrapperClassName="w-full" value={query} onChange={setQuery} onPick={pickKeyword}
         suggest={(text) => suggestKeywords(text, providers, categories, location, country)}
-        autoFocus={autoFocus} className="w-full bg-transparent outline-none" placeholder="Plumber, therapist, gemach…" aria-label="What are you looking for?" />
+        autoFocus={autoFocus} className="w-full bg-transparent outline-none" placeholder="Shul, mikvah, restaurant…" aria-label="What are you looking for?" />
     </label>
     <label className="flex flex-1 items-center gap-3 border-b px-3 py-3 md:border-b-0 md:border-r">
       <MapPin className="text-brand-teal" />

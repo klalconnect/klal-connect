@@ -257,7 +257,7 @@ export default function Browse() {
     <div className="mb-6 grid gap-2 rounded-lg bg-brand-surface p-3 ring-1 ring-brand-line md:grid-cols-12">
       <SuggestInput wrapperClassName="md:col-span-4" value={q} onChange={setQ} onPick={pickKeyword}
         suggest={(text) => suggestKeywords(text, providers, categories, place, country)}
-        placeholder="Plumber, therapist, gemach…" aria-label="What are you looking for?" />
+        placeholder="Shul, mikvah, restaurant…" aria-label="What are you looking for?" />
       <SuggestInput wrapperClassName="md:col-span-2" value={place} onChange={choosePlace} onPick={(item) => choosePlace(item.value)}
         suggest={(text) => suggestPlaces(text, providers, country, countPlace, near)} suggestMore={(text) => (text.length >= 2 ? lookupPlaces(text, { country, near }) : [])} minLength={0}
         placeholder={country ? `All of ${country}` : 'Any city, state or ZIP'} aria-label="Where: city, state or ZIP" />
