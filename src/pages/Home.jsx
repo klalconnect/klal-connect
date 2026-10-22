@@ -75,16 +75,21 @@ export default function Home() {
     return [...found, ...extra].slice(0, 8);
   }, [providers, community]);
 
-  // Counted against exactly what a click will return, so a number on a chip is
-  // a promise the directory keeps. Links with results come first; the rest stay
-  // visible, because a gap is also information — and an invitation.
+  // Counted against what a click will return, only to put the links with
+  // results first and grey out the rest; the number itself is not shown (see
+  // the category tiles below). A gap stays visible, because it is also
+  // information — and an invitation.
   const quickLinks = useMemo(() => QUICK_LINKS
     .map(([label, q]) => ({ label, q, count: countMatches(providers, q, community) }))
     .sort((a, b) => (b.count > 0) - (a.count > 0)), [providers, community]);
 
-  // Real counts or none. A category with nothing in it is not hidden and is
-  // not promised as "coming soon" — nobody has committed to filling it. It
-  // asks for the first listing instead, which is the actual bottleneck.
+  // Counted only to order the tiles and spot the empty ones; no number is
+  // shown, the same as the category cards on Resources. Every count on this
+  // page measured something slightly different (a city name, a search, a
+  // drive radius), so they disagreed with each other and with the results a
+  // tap opened. A category with nothing in it is not hidden and is not
+  // promised as "coming soon" — nobody has committed to filling it. It asks
+  // for the first listing instead, which is the actual bottleneck.
   const tiles = useMemo(() => categories
     .map((c) => ({ ...c, count: local.filter((p) => p.category === c.name).length }))
     .sort((a, b) => b.count - a.count || (a.order ?? 99) - (b.order ?? 99))
@@ -124,7 +129,7 @@ export default function Home() {
           key={q}
           to={`/browse?q=${encodeURIComponent(q)}${community ? `&location=${encodeURIComponent(community)}` : ''}`}
           className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold transition ${count > 0 ? 'bg-brand-tint text-brand-teal hover:ring-1 hover:ring-brand-teal' : 'text-brand-muted ring-1 ring-brand-line hover:text-brand-ink'}`}
-        >{label}{count > 0 && <span className="text-xs font-bold text-brand-teal/70">{count}</span>}</Link>)}
+        >{label}</Link>)}
       </div>
       <AddListingPrompt />
     </section>
@@ -133,12 +138,12 @@ export default function Home() {
     {communities.length > 0 && <section>
       <div className="flex flex-wrap items-center gap-2">
         <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-ink"><MapPin size={15} className="text-brand-teal" />Community</span>
-        {communities.map(({ city, count }) => <button
+        {communities.map(({ city }) => <button
           key={city}
           type="button"
           onClick={() => setCommunity(city === community ? '' : city)}
           className={`rounded-full px-3 py-1.5 text-sm font-semibold transition ${city === community ? 'bg-brand-navy text-white' : 'bg-brand-surface text-brand-body ring-1 ring-brand-line hover:text-brand-ink'}`}
-        >{city}{count > 0 && city !== community && <span className="ml-1.5 text-xs text-brand-muted">{count}</span>}</button>)}
+        >{city}</button>)}
         {community && <button type="button" onClick={() => setCommunity('')} className="text-sm font-medium text-brand-muted hover:text-brand-ink">Show everywhere</button>}
       </div>
     </section>}
@@ -161,9 +166,7 @@ export default function Home() {
           >
             <Icon className={`mb-3 ${empty ? 'text-brand-muted' : 'text-brand-teal'}`} size={22} />
             <span className={`block text-sm font-semibold leading-tight ${empty ? 'text-brand-body' : 'text-brand-ink'}`}>{categoryLabel(c.name)}</span>
-            <span className="mt-1 block text-xs text-brand-muted">
-              {empty ? 'Add the first' : `${c.count} listed`}
-            </span>
+            {empty && <span className="mt-1 block text-xs text-brand-muted">Add the first</span>}
           </Link>;
         })}
       </div>
@@ -269,7 +272,7 @@ function LocalSection({ providers, community }) {
       <div>
         <span className="eyebrow">NEAR YOU</span>
         <h2 className="title">Help {where ? `near ${where}` : 'near you'}</h2>
-        <p className="helper">{near.length} {near.length === 1 ? 'listing' : 'listings'} within about an hour's drive, closest first.</p>
+        <p className="helper">Within about an hour's drive, closest first.</p>
       </div>
       {near.length > shown.length && <Link to={browseHere} className="text-sm font-semibold text-brand-teal">See more</Link>}
     </div>
