@@ -13,7 +13,6 @@
 import CITY_COORDS from '../data/cityCoords.js';
 import { countryOf, countryName, US } from './countries.js';
 import { stateName } from './place.js';
-import { milesBetween } from './userLocation.js';
 
 // About an hour's drive: Lakewood and Monsey are near Brooklyn, Miami is near
 // Boca Raton, Philadelphia is not near New York.
@@ -74,6 +73,14 @@ export function placePoint({ lat, lng, city, state, country } = {}) {
   const c = norm(name);
   const key = Object.keys(CITY_COORDS).find((k) => k.split('|')[0] === c);
   return key ? { lat: CITY_COORDS[key][0], lng: CITY_COORDS[key][1] } : null;
+}
+
+// Kept here rather than imported from @/lib/userLocation, which needs the
+// API client and React: this file is also run by the build script under Node.
+const rad = (d) => (d * Math.PI) / 180;
+function milesBetween(lat1, lng1, lat2, lng2) {
+  const h = Math.sin(rad(lat2 - lat1) / 2) ** 2 + Math.cos(rad(lat1)) * Math.cos(rad(lat2)) * Math.sin(rad(lng2 - lng1) / 2) ** 2;
+  return 3958.8 * 2 * Math.asin(Math.sqrt(h));
 }
 
 /**

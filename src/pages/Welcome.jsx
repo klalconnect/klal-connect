@@ -9,6 +9,7 @@ import InviteButton from '@/components/InviteButton';
 import { locateFromCity } from '@/hooks/useDetectLocation';
 import CityInput from '@/components/CityInput';
 import ResourceCard from '@/components/ResourceCard';
+import { nearbyListings, placePoint } from '@/lib/nearby';
 
 // The ninety seconds after sign-up: one question per card, every card
 // skippable, and the value (nearby listings) shown before the ask (invites).
@@ -48,10 +49,21 @@ export default function Welcome() {
     return members.find((m) => m.id !== me?.id && (m.full_name || '').trim().toLowerCase() === wanted) || null;
   })();
 
+  // The listings nearest the city they just gave, most-used first within each
+  // town — never the most-used on the whole site, which greeted a member in
+  // Brooklyn with the Bahamas. Nothing within an hour's drive, or no city at
+  // all, is said plainly instead.
   useEffect(() => {
     if (step !== 2 || nearby) return;
-    api.entities.Provider.filter({ status: 'published' }, vouchesOn ? '-vouch_count' : '-usage_count', 5).then(setNearby).catch(() => setNearby([]));
-  }, [step, nearby, vouchesOn]);
+    const origin = placed?.latitude != null ? placePoint({ lat: placed.latitude, lng: placed.longitude })
+      : placePoint({ lat: me?.latitude, lng: me?.longitude }) || placePoint({ city });
+    if (!origin) { setNearby([]); return; }
+    const count = vouchesOn ? 'vouch_count' : 'usage_count';
+    const rank = (a, b) => (b[count] || 0) - (a[count] || 0);
+    api.entities.Provider.filter({ status: 'published' })
+      .then((all) => setNearby(nearbyListings(all, origin, { rank }).slice(0, 5)))
+      .catch(() => setNearby([]));
+  }, [step, nearby, vouchesOn, placed, me, city]);
 
   const save = async (patch) => { try { await api.auth.updateMe(patch); } catch { /* keep going; the profile page can fix it later */ } };
 
@@ -93,7 +105,7 @@ export default function Welcome() {
 
       {step === 1 && <>
         <div><span className="eyebrow">YOUR COMMUNITY</span><h1 className="title text-3xl">Where are you?</h1><p className="helper">Your city sets what you see first — the listings, people and asks near you.</p></div>
-        <label>City<CityInput value={city} onChange={(v) => { setCity(v); setPlaced(null); }} onPick={(p) => { setCity(p.city); setPlaced(p); save({ home_city: p.city, latitude: p.latitude, longitude: p.longitude, timezone: p.timezone, city: p.city, country_code: p.country_code, shabbos_mode_source: 'onboarding' }); }} onBlur={(e) => saveCity(e.target.value)} placeholder="Lakewood, Brooklyn, Jerusalem…"/></label>
+        <label>City<CityInput value={city} onChange={(v) => { setCity(v); setPlaced(null); setNearby(null); }} onPick={(p) => { setCity(p.city); setPlaced(p); save({ home_city: p.city, latitude: p.latitude, longitude: p.longitude, timezone: p.timezone, city: p.city, country_code: p.country_code, shabbos_mode_source: 'onboarding' }); }} onBlur={(e) => saveCity(e.target.value)} placeholder="Lakewood, Brooklyn, Jerusalem…"/></label>
         {placed && placed.timezone && <p className="rounded-xl bg-brand-tint p-3 text-sm text-brand-body">Shabbos and Yom Tov times will be computed for <b>{placed.city}</b> — time zone {placed.timezone}. You can change this any time in Settings.</p>}
         <div className="flex items-center justify-between"><button type="button" onClick={() => next()} className="text-sm font-medium text-brand-muted hover:text-brand-ink">Skip</button><button type="button" disabled={placing} onClick={async () => { await saveCity(city); setStep((s) => s + 1); }} className="primary disabled:opacity-60">{placing ? 'Checking…' : 'Continue'}<ArrowRight size={16}/></button></div>
       </>}
@@ -101,7 +113,7 @@ export default function Welcome() {
       {step === 2 && <>
         <div><span className="eyebrow">{type === 'community_member' ? 'NEAR YOU' : 'YOUR LISTING'}</span>
           <h1 className="title text-3xl">{type === 'community_member' ? 'Trusted by the community' : 'Put yourself in front of the klal'}</h1>
-          <p className="helper">{type === 'community_member' ? (vouchesOn ? 'The most-vouched listings on Klal right now. Vouches come from named members — never anonymous.' : 'Some of the most-used listings on Klal right now.') : `Your listing is live the moment you post it — members can find it, ${vouchesOn ? 'vouch for it, ' : ''}and message you on WhatsApp.`}</p></div>
+          <p className="helper">{type === 'community_member' ? (vouchesOn ? `The most-vouched listings near ${city || 'you'}. Vouches come from named members — never anonymous.` : `Some of the most-used listings near ${city || 'you'}.`) : `Your listing is live the moment you post it — members can find it, ${vouchesOn ? 'vouch for it, ' : ''}and message you on WhatsApp.`}</p></div>
         {type === 'community_member'
           ? (nearby === null ? <div className="loading min-h-24">Loading…</div>
             : nearby.length === 0

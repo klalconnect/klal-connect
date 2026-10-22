@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { api } from '@/api/client';
@@ -7,29 +7,53 @@ import { Plus, ChevronRight } from 'lucide-react';
 import AddListingPrompt from '@/components/AddListingPrompt';
 import CategoryGrid from '@/components/CategoryGrid';
 import ResourceCard from '@/components/ResourceCard';
+import NearYouPrompt from '@/components/NearYouPrompt';
+import useNearHere from '@/hooks/useNearHere';
+import { nearbyListings } from '@/lib/nearby';
+import { readStoredCommunity } from '@/lib/community';
 
 export default function Directory(){
   const {data:categories=[]}=useQuery({queryKey:['categories'],queryFn:()=>api.entities.Category.list('order')});
+  // The same list Home and the search box load, so it is usually cached.
+  const {data:providers=[]}=useQuery({queryKey:['providers','all'],
+    queryFn:()=>api.entities.Provider.filter({status:'published'})});
 
-  // Each rail is ranked over ALL published listings, not over a recency window.
-  // Previously every rail was computed from the newest 30, so the moment there
-  // were more than 30 listings the "most used" rail could only ever surface
-  // recent ones — the ranking silently stopped ranking.
-  const published={status:'published'};
-  const {data:recent=[]}=useQuery({queryKey:['providers','recent'],
-    queryFn:()=>api.entities.Provider.filter(published,'-created_date',3)});
-  const {data:favorites=[]}=useQuery({queryKey:['providers','used'],
-    queryFn:()=>api.entities.Provider.filter(published,'-usage_count',3)});
-  const {data:featured=[]}=useQuery({queryKey:['providers','featured'],
-    queryFn:()=>api.entities.Provider.filter({...published,featured:true},'-usage_count',3)});
+  // Every rail is "near you": ranked over the listings within an hour's drive
+  // of the person, nearest town first (see @/lib/nearby). They used to rank
+  // the whole site, so Brooklyn was shown the Bahamas. A rail with nothing
+  // that close is left out, and with no idea where the person is the rails
+  // give way to one "Use my location" prompt. A Home community chip, if one
+  // was picked this visit, counts as where they are.
+  const {origin,where,ask}=useNearHere(providers,readStoredCommunity());
+  const near=useMemo(()=>nearbyListings(providers,origin),[providers,origin]);
 
   // Matched against the category list rather than a hardcoded label: the string
   // here read 'Gemachs & Free Resources' while the category is named 'Gemachim',
   // so this section was always empty.
   const gemachCategory=(categories.find(c=>/gemach/i.test(c.name))||{}).name;
-  const {data:gemachs=[]}=useQuery({queryKey:['providers','gemach',gemachCategory],
-    enabled:!!gemachCategory,
-    queryFn:()=>api.entities.Provider.filter({...published,category:gemachCategory},'-created_date',3)});
+
+  // Each listing appears in one rail only, so a handful of local listings do
+  // not fill all three with the same cards.
+  const rails=useMemo(()=>{
+    const used=new Set();
+    const pick=(rows,rank)=>{
+      const out=rows.filter(p=>!used.has(p.id));
+      const top=rank?nearbyFirst(out,rank):out;
+      const chosen=top.slice(0,3);
+      chosen.forEach(p=>used.add(p.id));
+      return chosen;
+    };
+    const gemachs=pick(near.filter(p=>gemachCategory&&p.category===gemachCategory));
+    return {
+      featured:pick(near.filter(p=>p.featured)),
+      favorites:pick(near.filter(p=>p.usage_count>0),(a,b)=>(b.usage_count||0)-(a.usage_count||0)),
+      recent:pick(near,(a,b)=>String(b.created_date||'').localeCompare(String(a.created_date||''))),
+      gemachs,
+    };
+  },[near,gemachCategory]);
+  const {featured,favorites,recent,gemachs}=rails;
+  const here=where?` near ${where}`:' near you';
+  const browseNear=!origin?'':where?`?location=${encodeURIComponent(where)}`:`?lat=${origin.lat}&lng=${origin.lng}`;
   return <div className="page-shell space-y-12 py-10">
     <div><span className="eyebrow">RESOURCES</span><h1 className="title">Find trusted community resources</h1><p className="helper">Search the directory, browse categories, or explore what's new and popular near you.</p><div className="mt-5"><SearchPanel/></div><AddListingPrompt className="mt-4"/></div>
 
@@ -47,13 +71,14 @@ export default function Directory(){
         "recently added vs featured" duplication came from. Each rail now
         carries the name of what it actually ranks, and one with nothing to
         rank does not appear at all. */}
-    <ProviderSection title="Featured resources" items={featured}/>
-    <ProviderSection title="Most used in the community" items={favorites.filter(p=>p.usage_count>0)}/>
-    <ProviderSection title="Recently added" items={recent}/>
+    {!origin&&providers.length>0&&<NearYouPrompt ask={ask} title="Featured, popular and new near you"/>}
+    <ProviderSection title={`Featured${here}`} items={featured} more={`/browse${browseNear}`}/>
+    <ProviderSection title={`Most used${here}`} items={favorites} more={`/browse${browseNear}`}/>
+    <ProviderSection title={`Recently added${here}`} items={recent} more={`/browse${browseNear}`}/>
 
     {gemachs.length>0&&(
       <section>
-        <div className="section-head"><div><span className="eyebrow">GEMACHS & FREE RESOURCES</span><h2 className="title">Find a Gemach near you</h2><p className="helper">Borrow what you need, or support an organization that gives to the community.</p></div><Link to={`/browse${gemachCategory?`?category=${encodeURIComponent(gemachCategory)}`:''}`} className="text-sm font-semibold text-brand-teal">Browse all gemachs</Link></div>
+        <div className="section-head"><div><span className="eyebrow">GEMACHS & FREE RESOURCES</span><h2 className="title">Find a Gemach{here}</h2><p className="helper">Borrow what you need, or support an organization that gives to the community.</p></div><Link to={`/browse${browseNear||'?'}${browseNear?'&':''}category=${encodeURIComponent(gemachCategory)}`} className="text-sm font-semibold text-brand-teal">Browse gemachs</Link></div>
         <div className="grid grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-[repeat(3,minmax(0,1fr))]">{gemachs.map(p=><ResourceCard key={p.id} provider={p}/>)}</div>
       </section>
     )}
@@ -71,9 +96,16 @@ export default function Directory(){
   </div>;
 }
 
-function ProviderSection({ title, items }){
+// Nearest towns first, `rank` deciding within each: the three best of the
+// closest few towns, not the three most used anywhere within the hour.
+function nearbyFirst(rows,rank){
+  const nearest=rows.slice(0,12);
+  return [...nearest].sort(rank).concat(rows.slice(12));
+}
+
+function ProviderSection({ title, items, more='/browse' }){
   // A heading with nothing under it reads as broken. Nothing is flagged
   // featured yet, so that rail simply does not appear until something is.
   if(!items || items.length===0) return null;
-  return <section><div className="section-head"><h2 className="title">{title}</h2><Link to="/browse" className="text-sm font-semibold text-brand-teal">See more</Link></div><div className="grid grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-[repeat(3,minmax(0,1fr))]">{items.map(p=><ResourceCard key={p.id} provider={p}/>)}</div></section>;
+  return <section><div className="section-head"><h2 className="title">{title}</h2><Link to={more} className="text-sm font-semibold text-brand-teal">See more</Link></div><div className="grid grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-[repeat(3,minmax(0,1fr))]">{items.map(p=><ResourceCard key={p.id} provider={p}/>)}</div></section>;
 }
