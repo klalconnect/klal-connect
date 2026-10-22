@@ -1,53 +1,45 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
-// The community someone is looking at on Home, or on Resources.
+// The community someone picked from the chips on Home.
 //
 // The choice lives in the URL first, so a link carries it to whoever it is
-// sent to, and in sessionStorage as well so coming back to the page (or
-// pressing back from the results) finds it where it was left.
+// sent to, and in sessionStorage as well so coming back to Home finds it where
+// it was left.
 //
-// Home and Resources each keep their own. Searching Boca on one used to fill
-// Boca into the other as well, where it stayed stuck until cleared by hand.
-// The results page (/browse) is shared, so it files whatever is searched
-// there under whichever of the two was opened last — the one it came from.
+// Only a chip picked on Home itself is remembered. A place typed into a search
+// is part of that search: it used to be remembered too, so going back from
+// "Food in Hollywood" left Hollywood stuck in the Where box on Home and
+// Resources until cleared by hand.
 //
 // sessionStorage, not localStorage: reopening the app should be a fresh start
 // with empty search boxes, not last week's "Boca Raton" still filled in.
 
-const SCOPES = ['home', 'resources'];
-const ORIGIN = 'kc_search_from';
-const keyFor = (scope) => `kc_community_${SCOPES.includes(scope) ? scope : 'home'}`;
+const KEY = 'kc_home_community';
+// Earlier versions' copies, some of them holding places typed into searches.
+const OLD_KEYS = ['kc_community', 'kc_community_home', 'kc_community_resources', 'kc_search_from'];
 
-// Home and Resources call this as they open, so /browse knows which of the
-// two a search belongs to.
-export function markSearchOrigin(scope) {
-  try { sessionStorage.setItem(ORIGIN, scope); } catch { /* no-op */ }
+export function readStoredCommunity() {
+  try { return sessionStorage.getItem(KEY) || ''; } catch { return ''; }
 }
 
-export function searchOrigin() {
-  try { return sessionStorage.getItem(ORIGIN) || 'home'; } catch { return 'home'; }
-}
-
-export function readStoredCommunity(scope = searchOrigin()) {
-  try { return sessionStorage.getItem(keyFor(scope)) || ''; } catch { return ''; }
-}
-
-export function storeCommunity(name, scope = searchOrigin()) {
+export function storeCommunity(name) {
   // Wrapped: a private window throws on write, and remembering the community
   // is a convenience — the URL is the copy that matters.
   try {
-    if (name) sessionStorage.setItem(keyFor(scope), name);
-    else sessionStorage.removeItem(keyFor(scope));
-    // Older versions kept one shared copy, first for good and then per visit;
-    // let go of both.
-    localStorage.removeItem('kc_community');
-    sessionStorage.removeItem('kc_community');
+    if (name) sessionStorage.setItem(KEY, name);
+    else sessionStorage.removeItem(KEY);
   } catch { /* no-op */ }
 }
 
+// Let go of the older copies as the app loads, before anything reads them.
+try {
+  OLD_KEYS.forEach((k) => sessionStorage.removeItem(k));
+  localStorage.removeItem('kc_community');
+} catch { /* no-op */ }
+
 /**
- * The selected community for `scope` ('home' or 'resources'), a setter that persists it, and whether it was
+ * The selected community, a setter that persists it, and whether it was
  * actually chosen (false while it is only the fallback).
  *
  * Precedence is URL, then what was remembered, then `fallback` — which
@@ -56,13 +48,10 @@ export function storeCommunity(name, scope = searchOrigin()) {
  * or remembered: a guess about where someone lives should not end up in a
  * shared link, or typed into a search box they did not fill in.
  */
-export function useCommunity(fallback = '', scope = 'home') {
+export function useCommunity(fallback = '') {
   const [params, setParams] = useSearchParams();
   const fromUrl = params.get('community') || '';
-  // Set while rendering, not in an effect: the page's own search box can be
-  // submitted before effects run, and its results must land under this page.
-  markSearchOrigin(scope);
-  const [community, setLocal] = useState(() => fromUrl || readStoredCommunity(scope));
+  const [community, setLocal] = useState(() => fromUrl || readStoredCommunity());
   const [chosen, setChosen] = useState(() => Boolean(community));
 
   // Both effects deliberately watch one value and read the other. Depending on
@@ -73,7 +62,7 @@ export function useCommunity(fallback = '', scope = 'home') {
   // A shared link decides, and what it decides is then remembered.
   useEffect(() => { if (fromUrl && fromUrl !== community) { setLocal(fromUrl); setChosen(true); } }, [fromUrl]);
   useEffect(() => { if (!community && fallback) setLocal(fallback); }, [fallback]);
-  useEffect(() => { if (chosen || !community) storeCommunity(community, scope); }, [community, chosen, scope]);
+  useEffect(() => { if (chosen || !community) storeCommunity(community); }, [community, chosen]);
 
   const setCommunity = useCallback((name) => {
     setLocal(name || '');

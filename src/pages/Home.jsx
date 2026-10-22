@@ -53,7 +53,7 @@ export default function Home() {
   });
 
   const homeCity = String(me?.home_city || me?.city || '').trim();
-  const [community, setCommunity, chosen] = useCommunity(homeCity, 'home');
+  const [community, setCommunity, chosen] = useCommunity(homeCity);
 
   // What is available where they are. A listing that serves everywhere serves
   // here too — see @/lib/place, which is also what the search uses.

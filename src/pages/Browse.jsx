@@ -12,7 +12,6 @@ import { inCountry } from '@/lib/countries';
 import { KITCHENS, kitchenMatches, kitchenOf } from '@/lib/kitchen';
 import { lookupPlaces } from '@/lib/placeLookup';
 import { providerPath } from '@/lib/paths';
-import { readStoredCommunity, storeCommunity } from '@/lib/community';
 import { categoryLabel } from '@/lib/categories';
 
 const rad = (x) => x * Math.PI / 180;
@@ -32,12 +31,10 @@ export default function Browse() {
   const [providers, setProviders] = useState([]);
   const [categories, setCategories] = useState([]);
   const [q, setQ] = useState(params.get('q') || '');
-  // The place last searched from Home or Resources (whichever this came from),
-  // unless this link names one.
-  // A link with an empty location (a search with the Where box left blank)
-  // means everywhere.
-  const linkedPlace = params.has('location');
-  const [place, setPlace] = useState(params.get('location') || (linkedPlace ? '' : readStoredCommunity()));
+  // Only the place this link names. A place typed here belongs to this
+  // search: going back to Home or Resources finds their own Where box empty,
+  // not "Hollywood" carried over from the results.
+  const [place, setPlace] = useState(params.get('location') || '');
   const [category, setCategory] = useState(params.get('category') || '');
   const [country, setCountry] = useState(params.get('country') || '');
   const [kitchen, setKitchen] = useState(params.get('kitchen') || '');
@@ -65,10 +62,19 @@ export default function Browse() {
     if (value && test && !inCountry(providers, value).some(test)) choosePlace('');
   };
 
-  // Narrowing to a place is also choosing a community — remembered, so the
-  // rest of the site opens where this search left off. The matching itself is
-  // in @/lib/search, shared with the homepage search box.
-  useEffect(() => { storeCommunity(place); }, [place]);
+  // The search is kept in this page's own address instead, so opening a
+  // listing and coming back finds the results as they were left. Written
+  // straight into the current history entry, not through the router: the
+  // entry keeps its key, so the back button's scroll restore still finds it,
+  // and nothing re-renders on every letter typed.
+  useEffect(() => {
+    const next = new URLSearchParams(location.search);
+    const set = (name, value) => { if (value) next.set(name, value); else next.delete(name); };
+    set('q', q); set('location', place); set('category', category); set('country', country); set('kitchen', kitchen);
+    const query = next.toString();
+    const url = `${location.pathname}${query ? `?${query}` : ''}${location.hash}`;
+    if (url !== `${location.pathname}${location.search}${location.hash}`) window.history.replaceState(window.history.state, '', url);
+  }, [q, place, category, country, kitchen]);
 
   // Every word typed and the place both count; see @/lib/search. Everything
   // but the category is applied here, so the category list can count what
