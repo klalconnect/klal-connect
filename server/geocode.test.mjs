@@ -181,7 +181,24 @@ for (const [query, city, tz] of [
 const known = await local.reverseGeocode(31.7683, 35.2137);
 check('reverse names a known community', known.city === 'Jerusalem' && known.country_code === 'IL', `${known.city} / ${known.country_code}`);
 const unknown = await local.reverseGeocode(42.88, -78.87);
-check('reverse elsewhere still gives a time zone', unknown.timezone === 'America/New_York' && unknown.city === '', `${JSON.stringify(unknown.city)} / ${unknown.timezone}`);
+// Not a curated community, but the bundled world list names it.
+check('reverse elsewhere names the town from the world list', unknown.timezone === 'America/New_York' && unknown.city === 'Buffalo', `${JSON.stringify(unknown.city)} / ${unknown.timezone}`);
+const sea = await local.reverseGeocode(30, -40);
+check('reverse in the middle of nowhere still gives a time zone', sea.city === '' && !!sea.timezone, `${JSON.stringify(sea.city)} / ${sea.timezone}`);
+// Towns no curated list has, which the world list must find with no key.
+for (const [query, city, region, tz] of [
+  ['deerf', 'Deerfield Beach', 'FL', 'America/New_York'],
+  ['Boise', 'Boise', 'ID', 'America/Boise'],
+  ['Boise, ID', 'Boise', 'ID', 'America/Boise'],
+  ['lakewood co', 'Lakewood', 'CO', 'America/Denver'],
+]) {
+  const [hit] = await local.searchPlaces(query, 6);
+  check(`world list ${JSON.stringify(query)}`, hit && hit.city === city && hit.region === region && hit.timezone === tz, hit && `${hit.label} / ${hit.timezone}`);
+}
+const [haifa] = await local.searchPlaces('Haifa', 2);
+check('a place outside the US spells out its country', haifa?.label === 'Haifa, Israel', haifa?.label);
+const lw = await local.searchPlaces('Lakewood', 6);
+check('the curated Lakewood still comes first', lw[0]?.region === 'NJ' && lw.length > 1, lw.map((r) => r.label));
 
 // A provider that is configured and then fails. This is the case that bit: the
 // curated list had already answered above, and a single provider error threw
@@ -203,9 +220,12 @@ check('a known community still answers', stillKnown && stillKnown.city === 'Lake
 const farPoint = await failing.reverseGeocode(41.0, -101.0).catch((err) => ({ error: err.message }));
 check('an unknown point still yields a time zone', !!farPoint.timezone, farPoint.timezone || farPoint.error);
 
-let refused = null;
-try { await failing.searchPlaces('Zzqqxlandiaville', 4); } catch (err) { refused = err.message; }
-check('a query nothing knows still fails rather than inventing one', !!refused, refused);
+// A town name nobody knows is an empty answer (shown as "not on our list"),
+// never an invented place.
+const none = await failing.searchPlaces('Zzqqxlandiaville', 4).catch((err) => ({ error: err.message }));
+check('a query nothing knows finds nothing rather than inventing one', Array.isArray(none) && none.length === 0, none);
+const deerfield = await failing.searchPlaces('Deerfield Beach', 4);
+check('a town in the world list answers while the provider is down', deerfield[0]?.city === 'Deerfield Beach', deerfield.map((r) => r.label));
 
 console.log(failures ? `\n${failures} FAILURE(S)` : '\nall provider adapters parse correctly, and the curated list answers without one');
 process.exit(failures ? 1 : 0);

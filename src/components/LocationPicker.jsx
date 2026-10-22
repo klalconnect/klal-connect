@@ -74,7 +74,11 @@ export default function LocationPicker({ user }) {
   const search = async () => {
     if (!q.trim()) return;
     setBusy(true);setErr('');
-    try { setResults(await api.geo.search(q, 8)); }
+    try {
+      const rows = await api.geo.search(q, 8);
+      setResults(rows);
+      if (!rows.length) setErr('No town by that name. Check the spelling, or use your current location.');
+    }
     catch (e) { setErr(e.message || 'Search failed.'); }
     setBusy(false);
   };
