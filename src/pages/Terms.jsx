@@ -43,7 +43,7 @@ export default function Terms() {
       <section>
         <h2 className="section-title">4. Your account</h2>
         <ul className="mt-2 list-disc space-y-1 pl-5">
-          <li>You must be at least 18 years old to make an account.</li>
+          <li>You must be at least 13 years old to make an account. If you are under 18, please use the site with a parent's or guardian's permission.</li>
           <li>Give us a real email address and keep your password private. You are responsible for what happens on your account.</li>
           <li>One person per account. Don't make an account for someone else without their permission, or pretend to be someone you're not.</li>
         </ul>
