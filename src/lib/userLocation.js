@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/api/client';
 import { listingPoint, placePoint } from './nearby.js';
+import { countryName } from './countries.js';
 import { readSaved, save } from './savedLocation.js';
 
 export { readSaved };
@@ -53,8 +54,10 @@ export function memberCity(me) {
 }
 
 /**
- * The person's location: { lat, lng, city, source } with source 'profile',
- * 'browser' or 'chosen', or null fields while none is known.
+ * The person's location: { lat, lng, city, country, source } with source
+ * 'profile', 'browser' or 'chosen', or null fields while none is known.
+ * `country` is a name ("Israel") from the same place, never a guess from the
+ * connection: that guess is what put a New Yorker's travel banner in Ohio.
  *
  * `ask()` asks the browser (resolving true or false), `choose(place)` keeps a
  * picked place ({ latitude, longitude, city }), and `forget()` drops either.
@@ -93,11 +96,11 @@ export function useUserLocation() {
 
   const profileCity = memberCity(me);
   let here = null;
-  if (hasPoint(me)) here = { lat: Number(me.latitude), lng: Number(me.longitude), city: profileCity, source: 'profile' };
+  if (hasPoint(me)) here = { lat: Number(me.latitude), lng: Number(me.longitude), city: profileCity, country: me.country_code, source: 'profile' };
   else if (saved) here = saved;
   else if (profileCity) {
     const point = placePoint({ city: profileCity, country: me?.country_code });
-    if (point) here = { ...point, city: profileCity, source: 'profile' };
+    if (point) here = { ...point, city: profileCity, country: me?.country_code, source: 'profile' };
   }
-  return { lat: here?.lat ?? null, lng: here?.lng ?? null, city: here?.city || '', source: here?.source || null, ask, choose, forget };
+  return { lat: here?.lat ?? null, lng: here?.lng ?? null, city: here?.city || '', country: countryName(here?.country), source: here?.source || null, ask, choose, forget };
 }

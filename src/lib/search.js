@@ -288,6 +288,27 @@ export function placeCounter(providers, { q = '', country = '', keep = null } = 
 }
 
 /** Keyword suggestions, each counted the way the search itself would count it. */
+// A link's "country=everywhere": Everywhere picked on purpose, which a link
+// with no country cannot say now that no country means "your own".
+export const EVERYWHERE = 'everywhere';
+
+/**
+ * Where the Country box starts: the person's own country (`mine`), so a
+ * visitor from Israel opens on Israel's listings and one from the US on the
+ * US's. Everywhere instead when we do not know their country, nothing is
+ * listed there, or the place typed is somewhere else: a New Yorker searching
+ * Jerusalem should find Jerusalem, not an empty US list. A place with
+ * nothing listed anywhere leaves the box alone.
+ */
+export function startingCountry(providers, mine, where = '') {
+  const name = countryName(mine);
+  if (!name || !providers.some((p) => countryOf(p) === name)) return '';
+  const test = placeMatcher(where, providers, { everywhere: false });
+  if (!test) return name;
+  const found = providers.filter(test);
+  return !found.length || found.some((p) => countryOf(p) === name) ? name : '';
+}
+
 export function suggestKeywords(raw, providers, categories, where = '', country = '') {
   const count = (q) => countMatches(providers, q, where, country);
   const here = inCountry(providers, country);
