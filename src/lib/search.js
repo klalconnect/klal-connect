@@ -264,6 +264,29 @@ export function countMatches(providers, q, where = '', country = '') {
   return searchDirectory(providers, { q, where, country }).results.filter((r) => !r.wide).length;
 }
 
+/**
+ * Counts, place by place, what a search would show in each place itself (the
+ * listings that only serve from anywhere are counted apart, as the page shows
+ * them). The keyword is matched once, so counting a list of places as someone
+ * types stays quick. `keep` is any further filter the page applies.
+ */
+export function placeCounter(providers, { q = '', country = '', keep = null } = {}) {
+  // Matched on first use, so a page can make one for every keystroke cheaply.
+  let pool = null;
+  const matched = () => pool || (pool = searchDirectory(providers, { q, anywhere: true, country }).results
+    .map((r) => r.provider).filter((p) => !keep || keep(p)));
+  const chosen = countryName(country) || String(country || '').trim();
+  const cache = new Map();
+  return (where) => {
+    const key = String(where || '').trim().toLowerCase();
+    if (!cache.has(key)) {
+      const here = placeMatcher(where, providers, { everywhere: false });
+      cache.set(key, matched().filter((p) => (!here || here(p)) && (!chosen || countryOf(p) === chosen)).length);
+    }
+    return cache.get(key);
+  };
+}
+
 /** Keyword suggestions, each counted the way the search itself would count it. */
 export function suggestKeywords(raw, providers, categories, where = '', country = '') {
   const count = (q) => countMatches(providers, q, where, country);
@@ -279,8 +302,22 @@ export function suggestKeywords(raw, providers, categories, where = '', country 
  * Place suggestions, with "Everywhere" always first, so leaving the box blank
  * is a choice on screen rather than a silent fallback. With a country picked,
  * only places in that country are suggested.
+ *
+ * Each number is what picking that place would show, counted by the search
+ * itself: "Hollywood" also finds Hollywood Hills, and a category or keyword
+ * already chosen narrows it. `countFor(place)` lets the page count with its
+ * own filters; a place it would show nothing for is left out.
  */
-export function suggestPlaces(raw, providers, country = '') {
+export function suggestPlaces(raw, providers, country = '', countFor = null) {
+  const count = countFor || placeCounter(providers, { country });
+  return listPlaces(raw, providers, country).flatMap((s) => {
+    if (s.kind !== 'place' || !s.value) return [s];
+    const n = count(s.value);
+    return n ? [{ ...s, count: n }] : [];
+  });
+}
+
+function listPlaces(raw, providers, country) {
   const text = String(raw || '').trim();
   const everywhere = { group: 'Places with listings', kind: 'place', label: 'Everywhere', value: '', hint: country ? `all of ${country}` : 'all communities' };
   if (!text) return [everywhere];

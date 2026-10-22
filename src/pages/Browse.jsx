@@ -4,7 +4,7 @@ import { api } from '@/api/client';
 import { List, Map as MapIcon, SlidersHorizontal, MessageCircle, Plus, MapPin, Globe, ChevronDown } from 'lucide-react';
 import ResourceCard from '@/components/ResourceCard';
 import DirectoryMap from '@/components/DirectoryMap';
-import { searchDirectory, suggestKeywords, suggestPlaces } from '@/lib/search';
+import { placeCounter, searchDirectory, suggestKeywords, suggestPlaces } from '@/lib/search';
 import SuggestInput from '@/components/SuggestInput';
 import CountrySelect from '@/components/CountrySelect';
 import { placeMatcher } from '@/lib/place';
@@ -130,6 +130,13 @@ export default function Browse() {
   // or a search that turned up places with a kitchen label.
   const showKitchen = !!kitchen || category === 'Food & Catering' || scoped.some((p) => kitchenOf(p) && (!category || p.category === category));
 
+  // The numbers beside places in the Where box are what picking that place
+  // would show with everything else on screen kept: the words typed, the
+  // category, Verified only and the kitchen. Counted from the listings as
+  // loaded, so a new listing is in them the next time the page opens.
+  const countPlace = useMemo(() => placeCounter(providers, { q, country, keep: passes }),
+    [providers, q, country, category, verified, kitchen]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Suggestions under the keyword box count what is listed in the place being
   // searched, so they never promise results the page will not show.
   const navigate = useNavigate();
@@ -201,7 +208,7 @@ export default function Browse() {
         suggest={(text) => suggestKeywords(text, providers, categories, place, country)}
         placeholder="Plumber, therapist, gemach…" aria-label="What are you looking for?" />
       <SuggestInput wrapperClassName="md:col-span-2" value={place} onChange={choosePlace} onPick={(item) => choosePlace(item.value)}
-        suggest={(text) => suggestPlaces(text, providers, country)} suggestMore={(text) => (text.length >= 2 ? lookupPlaces(text) : [])} minLength={0}
+        suggest={(text) => suggestPlaces(text, providers, country, countPlace)} suggestMore={(text) => (text.length >= 2 ? lookupPlaces(text) : [])} minLength={0}
         placeholder={country ? `All of ${country}` : 'Any city, state or ZIP'} aria-label="Where: city, state or ZIP" />
       <CountrySelect className="field md:col-span-2" providers={providers} value={country} onChange={chooseCountry} />
       <select className="field md:col-span-2" value={category} onChange={(e) => setCategory(e.target.value)}>
