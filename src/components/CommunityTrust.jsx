@@ -5,9 +5,15 @@ import { api } from '@/api/client';
 import { markEngaged } from '@/lib/engagement';
 import { loadMyConnections, connectedIds } from '@/lib/connections';
 import { isSensitiveListing } from '@/lib/sensitivity';
+import { categoryLabel, SHUL_LABEL } from '@/lib/categories';
 import useVouchesEnabled from '@/hooks/useVouchesEnabled';
 
 const initials = (name) => (name || '?').split(' ').map((x) => x[0]).slice(0, 2).join('').toUpperCase();
+
+// Nobody "uses" a shul; they have been there. Shuls are filed under a few
+// names (see categoryLabel), so it is the label that is checked. Mikvahs would
+// read the same way, but they are sensitive listings and never show this.
+const isPlace = (p) => categoryLabel(p?.category) === SHUL_LABEL || categoryLabel(p?.subcategory) === SHUL_LABEL;
 
 // "Used by" and "vouched for by" on a listing, and the one way to add to them.
 //
@@ -137,6 +143,18 @@ export default function CommunityTrust({ provider, onCounts, onNote }) {
   const vouchedShown = vouchesOn && vouched;
   const shown = vouches.slice(0, 5);
   const names = shown.slice(0, 2).map((v) => v.author_name || 'A community member');
+  const place = isPlace(provider);
+
+  // Before anyone has said they used them, a big panel announcing that nobody
+  // has made every new listing look empty. Until the first person, it is one
+  // small line that is also the button.
+  if (usedCount === 0 && !used && !vouchedShown && step === null) {
+    return <div className="rounded-xl bg-brand-tint px-4 py-3 text-sm text-brand-body">
+      {place ? 'Been here?' : 'Used them?'}{' '}
+      <button type="button" onClick={markUsed} disabled={busy} className="font-semibold text-brand-teal hover:underline">{place ? 'Let others know' : 'Be the first to say so'}</button>
+      {err && <p className="mt-1 text-xs font-semibold text-brand-error">{err}</p>}
+    </div>;
+  }
 
   return <section className="panel space-y-4">
     <div className="flex items-center gap-4">
@@ -144,7 +162,7 @@ export default function CommunityTrust({ provider, onCounts, onNote }) {
         ? <span className="font-display text-5xl font-bold leading-none tracking-tight text-brand-teal tabular-nums">{usedCount.toLocaleString()}</span>
         : null}
       <div className="min-w-0">
-        <h2 className="section-title">{usedCount === 1 ? 'person in the community has used them' : usedCount > 0 ? 'people in the community have used them' : 'Nobody has said they used them yet'}</h2>
+        <h2 className="section-title">{place ? (usedCount === 1 ? 'person in the community has been here' : 'people in the community have been here') : usedCount === 1 ? 'person in the community has used them' : 'people in the community have used them'}</h2>
         {vouchesOn && vouches.length > 0 && <div className="mt-2 flex flex-wrap items-center gap-2">
           <span className="flex">
             {shown.map((v, i) => <Link key={v.id} to={`/profile/${v.created_by_id}`} title={v.author_name || 'Community member'} className={`grid h-7 w-7 place-items-center rounded-full bg-brand-tint text-[10px] font-bold text-brand-teal ring-2 ring-brand-surface ${i ? '-ml-2' : ''}`}>{initials(v.author_name)}</Link>)}
@@ -159,8 +177,8 @@ export default function CommunityTrust({ provider, onCounts, onNote }) {
 
     <div className="rounded-xl bg-brand-tint p-4 text-sm text-brand-ink">
       {!used && !vouchedShown && step === null && <div className="space-y-3">
-        <p><b>Have you used {provider.name}?</b> Tapping below adds you to the count. Thanks for helping the next person.</p>
-        <button type="button" onClick={markUsed} disabled={busy} className="primary"><Check size={16}/>I&apos;ve used them</button>
+        <p><b>{place ? `Have you been to ${provider.name}?` : `Have you used ${provider.name}?`}</b> Tapping below adds you to the count. Thanks for helping the next person.</p>
+        <button type="button" onClick={markUsed} disabled={busy} className="primary"><Check size={16}/>{place ? <>I&apos;ve been here</> : <>I&apos;ve used them</>}</button>
       </div>}
 
       {step === 'vouch' && <div className="space-y-3">
