@@ -1,6 +1,6 @@
 // Directory search: plurals, typos, synonyms, places, and every word counting.
 import assert from 'node:assert/strict';
-import { placeCounter, searchDirectory, suggestPlaces } from './search.js';
+import { placeCounter, searchDirectory, startingCountry, suggestPlaces } from './search.js';
 import { countryOf, countriesFrom, placeLine } from './countries.js';
 
 let passed = 0;
@@ -151,5 +151,19 @@ ok('place counts match what picking the place shows', () => {
   assert.equal(suggestPlaces('Hollywood', H, '', placeCounter(H, { keep: food }))[0].count, shown('Hollywood', food));
   // A place with nothing for the search is not offered.
   assert.deepEqual(suggestPlaces('Hollywood', H, '', placeCounter(H, { q: 'shul' })).map((s) => [s.label, s.count]), [['Hollywood', 1]]);
+});
+ok('the Country box starts on your own country, unless the place is elsewhere', () => {
+  const W = [
+    L('Kings Highway Glatt', 'Food & Catering', 'Butcher', 'Brooklyn', 'NY'),
+    L('Mikvah Yerushalayim', 'Mikvas', "Women's Mikvah", 'Jerusalem', '', { country: 'Israel' }),
+  ];
+  assert.equal(startingCountry(W, 'US'), 'United States');
+  assert.equal(startingCountry(W, 'IL'), 'Israel');
+  assert.equal(startingCountry(W, ''), ''); // not known: Everywhere
+  assert.equal(startingCountry(W, 'FR'), ''); // nothing listed there: Everywhere
+  assert.equal(startingCountry(W, 'US', 'Brooklyn'), 'United States');
+  assert.equal(startingCountry(W, 'US', 'Jerusalem'), ''); // a place abroad: Everywhere
+  assert.equal(startingCountry(W, 'US', 'Bro'), 'United States'); // still typing
+  assert.equal(startingCountry(W, 'US', 'Lakewood'), 'United States'); // nothing listed there yet
 });
 console.log(`\n${passed} passed`);

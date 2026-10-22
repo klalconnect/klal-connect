@@ -4,7 +4,7 @@ import { api } from '@/api/client';
 import { List, Map as MapIcon, SlidersHorizontal, MessageCircle, Plus, MapPin, Globe, ChevronDown, X } from 'lucide-react';
 import ResourceCard from '@/components/ResourceCard';
 import DirectoryMap from '@/components/DirectoryMap';
-import { placeCounter, searchDirectory, suggestKeywords, suggestPlaces } from '@/lib/search';
+import { EVERYWHERE, placeCounter, searchDirectory, startingCountry, suggestKeywords, suggestPlaces } from '@/lib/search';
 import SuggestInput from '@/components/SuggestInput';
 import CountrySelect from '@/components/CountrySelect';
 import { placeMatcher } from '@/lib/place';
@@ -32,7 +32,12 @@ export default function Browse() {
   // not "Hollywood" carried over from the results.
   const [place, setPlace] = useState(params.get('location') || '');
   const [category, setCategory] = useState(params.get('category') || '');
-  const [country, setCountry] = useState(params.get('country') || '');
+  // The country picked, '' for Everywhere picked, or null for none picked yet,
+  // when the box starts on the person's own country (worked out below).
+  const [pickedCountry, setCountry] = useState(() => {
+    const given = params.get('country');
+    return given == null || given === '' ? null : given === EVERYWHERE ? '' : given;
+  });
   const [kitchen, setKitchen] = useState(params.get('kitchen') || '');
   // Closest first is the default whenever we know where the person is: the
   // spot "Near me" sent, else their profile city, or the place a guest picked
@@ -43,6 +48,7 @@ export default function Browse() {
   const urlLat = Number(params.get('lat')), urlLng = Number(params.get('lng'));
   const here = urlLat && urlLng ? { lat: urlLat, lng: urlLng } : me.lat != null ? { lat: me.lat, lng: me.lng } : null;
   const located = Boolean(here);
+  const country = pickedCountry ?? startingCountry(providers, me.country, place);
   // What they picked, if anything; until then the default follows the location,
   // which for a member arrives a moment after the page opens.
   const [picked, setSort] = useState('');
@@ -83,11 +89,11 @@ export default function Browse() {
   useEffect(() => {
     const next = new URLSearchParams(location.search);
     const set = (name, value) => { if (value) next.set(name, value); else next.delete(name); };
-    set('q', q); set('location', place); set('category', category); set('country', country); set('kitchen', kitchen);
+    set('q', q); set('location', place); set('category', category); set('country', pickedCountry === '' ? EVERYWHERE : pickedCountry); set('kitchen', kitchen);
     const query = next.toString();
     const url = `${location.pathname}${query ? `?${query}` : ''}${location.hash}`;
     if (url !== `${location.pathname}${location.search}${location.hash}`) window.history.replaceState(window.history.state, '', url);
-  }, [q, place, category, country, kitchen]);
+  }, [q, place, category, pickedCountry, kitchen]);
 
   // Every word typed and the place both count; see @/lib/search. Everything
   // but the category is applied here, so the category list can count what
@@ -171,8 +177,10 @@ export default function Browse() {
   // would show with everything else on screen kept: the words typed, the
   // category, Verified only and the kitchen. Counted from the listings as
   // loaded, so a new listing is in them the next time the page opens.
-  const countPlace = useMemo(() => placeCounter(providers, { q, country, keep: passes }),
-    [providers, q, country, category, verified, owned, kitchen]); // eslint-disable-line react-hooks/exhaustive-deps
+  // A country nobody picked does not narrow them, so a place abroad is still
+  // offered, and picking it opens on Everywhere (see startingCountry).
+  const countPlace = useMemo(() => placeCounter(providers, { q, country: pickedCountry || '', keep: passes }),
+    [providers, q, pickedCountry, category, verified, owned, kitchen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Suggestions under the keyword box count what is listed in the place being
   // searched, so they never promise results the page will not show.
@@ -184,8 +192,9 @@ export default function Browse() {
   };
 
   // The ownership filter is left out: it is remembered, so counting it would
-  // log a search every time someone who set it opens the page.
-  const isSearch = !!(q || place || category || verified || country || kitchen);
+  // log a search every time someone who set it opens the page. So is a
+  // country nobody picked: every visit starts on one.
+  const isSearch = !!(q || place || category || verified || pickedCountry || kitchen);
 
   // Every search is recorded, not only the ones where someone clicks the
   // button — most arrive from a link with the query already in the URL. The
@@ -233,7 +242,7 @@ export default function Browse() {
   // comes with somewhere to look.
   const otherPlaces = [...new Set(elsewhere.map((p) => (p.city || '').trim()).filter(Boolean))].slice(0, 6);
 
-  const clearFilters = () => { setQ(''); choosePlace(''); setCountry(''); setCategory(''); setVerified(false); setOwned(''); setKitchen(''); };
+  const clearFilters = () => { setQ(''); choosePlace(''); setCountry(null); setCategory(''); setVerified(false); setOwned(''); setKitchen(''); };
 
   return <div className="page-shell py-8">
     <div className="mb-7">
@@ -247,9 +256,9 @@ export default function Browse() {
         suggest={(text) => suggestKeywords(text, providers, categories, place, country)}
         placeholder="Plumber, therapist, gemach…" aria-label="What are you looking for?" />
       <SuggestInput wrapperClassName="md:col-span-2" value={place} onChange={choosePlace} onPick={(item) => choosePlace(item.value)}
-        suggest={(text) => suggestPlaces(text, providers, country, countPlace)} suggestMore={(text) => (text.length >= 2 ? lookupPlaces(text) : [])} minLength={0}
+        suggest={(text) => suggestPlaces(text, providers, pickedCountry || '', countPlace)} suggestMore={(text) => (text.length >= 2 ? lookupPlaces(text) : [])} minLength={0}
         placeholder={country ? `All of ${country}` : 'Any city, state or ZIP'} aria-label="Where: city, state or ZIP" />
-      <CountrySelect className="field md:col-span-2" providers={providers} value={country} onChange={chooseCountry} />
+      <CountrySelect wrapperClassName="md:col-span-2" labelClassName="left-3 right-9 mt-0.5 text-sm" className="field" providers={providers} value={country} onChange={chooseCountry} />
       <select className="field md:col-span-2" value={category} onChange={(e) => setCategory(e.target.value)}>
         <option value="">All categories</option>
         {categories.map((c) => <option key={c.id} value={c.name} disabled={countFor(c.name) === 0 && c.name !== category}>{categoryLabel(c.name)}</option>)}
