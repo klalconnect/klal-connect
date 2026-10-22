@@ -4,6 +4,7 @@ import { MapPin } from 'lucide-react';
 import { useShabbosStatus, shabbosState } from '@/hooks/useShabbosStatus';
 import { tokenStore } from '@/api/client';
 import { useAuth } from '@/lib/AuthContext';
+import PickCommunityBar from '@/components/PickCommunityBar';
 // Shared with the homepage's local section, so both show a Havdalah that falls
 // tomorrow the same way. See @/lib/time.
 import { timeInZone as fmt } from '@/lib/time';
@@ -11,7 +12,7 @@ function countdown(ms){ if(!ms) return ''; const s=Math.max(0,Math.floor((ms-Dat
 
 export default function ShabbosMode(){
   const { status, verified }=useShabbosStatus();
-  const { isAuthenticated }=useAuth();
+  const { isAuthenticated, isGuest }=useAuth();
   const [,force]=useState(0);
   // Lets someone past a full lock for genuine need — looking up a doctor or a
   // gemach. Writes stay blocked; this only makes the app readable, and it
@@ -39,7 +40,8 @@ export default function ShabbosMode(){
   // unlocked app during Shabbos is the failure this whole feature exists to
   // prevent, so an unverified state blocks instead.
   if(state==='unknown') return <Unverified/>;
-  if(state==='no-location') return <NoLocation/>;
+  // A guest has no Settings to set a location in, so they pick one here.
+  if(state==='no-location') return isGuest ? <PickCommunityBar/> : <NoLocation/>;
   if(state==='restricted'){
     // Nothing can be written either way — assertWritable refuses on the server.
     // The only question here is whether the app is readable.

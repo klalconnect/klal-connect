@@ -6,7 +6,7 @@
 import { store, users, userToPublic, GUEST_EMAIL } from './db.js';
 import { computeShabbosStatus, assertWritable as assertShabbosWritable } from './shabbos.js';
 import { canDeliverCodes } from './auth.js';
-import { pinForListing } from './geocode.js';
+import { pinForListing, tzFor } from './geocode.js';
 import { normalizeMinyanim } from '../src/lib/minyanim.js';
 import { normalizeKitchen } from '../src/lib/kitchen.js';
 import { vouchesEnabled } from './settings.js';
@@ -1256,8 +1256,25 @@ export const functions = {
 
   // The simulator passes { debug: {...} } to preview another time or location; that
   // only ever overlays the caller's own profile, never another user's.
-  async getShabbosStatus({ debug } = {}, user) {
-    const profile = { ...(user || {}) };
+  //
+  // A guest has no profile of their own (every visitor shares one), so the
+  // place they picked in this browser is sent as `place` and the times are
+  // worked out for it. Only for a guest or a signed-out visitor: a member's
+  // times always come from their own saved location.
+  async getShabbosStatus({ debug, place } = {}, user) {
+    let profile = { ...(user || {}) };
+    if ((!user || user.email === GUEST_EMAIL) && place && typeof place === 'object') {
+      const latitude = Number(place.latitude), longitude = Number(place.longitude);
+      if (Number.isFinite(latitude) && Number.isFinite(longitude) && Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180) {
+        profile = {
+          latitude, longitude,
+          // From the coordinates, not the device, which is wrong whenever someone travels.
+          timezone: tzFor(latitude, longitude),
+          city: String(place.city || '').slice(0, 80),
+          country_code: String(place.country_code || '').slice(0, 2),
+        };
+      }
+    }
     let now = Date.now();
     if (debug && typeof debug === 'object') {
       if (debug.now) now = new Date(debug.now).getTime() || now;
