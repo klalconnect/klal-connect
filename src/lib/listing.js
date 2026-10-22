@@ -165,6 +165,7 @@ export function normalizeListingPatch(patch, row, { badgeById, badgeApplies, saf
   // Anyone setting the kitchen by hand has answered the "check the kitchens"
   // note the backfill left on a meat-and-dairy place.
   if ('kitchen' in out) out.kitchen_unconfirmed = false;
+  if ('not_jewish_owned' in out) out.not_jewish_owned = out.not_jewish_owned === true;
   // A category change re-tests the badges already on the row, because a badge
   // only means anything next to the trade it was granted for.
   if ('badges' in out || ('category' in out && Array.isArray(row?.badges) && row.badges.length)) {

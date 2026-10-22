@@ -1,5 +1,13 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { api } from "@/api/client";
+import { readSaved } from "@/lib/savedLocation";
+
+// The place a guest picked or shared, which the server uses only when there is
+// no member profile to work from (see getShabbosStatus).
+function guestPlace() {
+  const saved = readSaved();
+  return saved ? { latitude: saved.lat, longitude: saved.lng, city: saved.city || "", country_code: saved.country || "" } : undefined;
+}
 
 // Shabbos / Yom Tov status, cached so the UI can fail CLOSED.
 //
@@ -62,7 +70,7 @@ export function useShabbosStatus() {
 
   const refresh = useCallback(async () => {
     try {
-      const r = await api.functions.invoke("getShabbosStatus", {});
+      const r = await api.functions.invoke("getShabbosStatus", { place: guestPlace() });
       if (!alive.current) return;
       if (r.status >= 400 || !r.data) throw new Error("unavailable");
       setStatus(r.data);
@@ -96,6 +104,8 @@ export function useShabbosStatus() {
     window.addEventListener("pageshow", onWake);
     window.addEventListener("focus", onWake);
     window.addEventListener("online", refresh);
+    // A guest picking their community changes which times apply.
+    window.addEventListener("kc-location", refresh);
 
     // Refresh right after the next boundary. Without this, havdalah passes and
     // the known window ends, which reads as "unknown" — a blocking screen — for
@@ -117,6 +127,7 @@ export function useShabbosStatus() {
       window.removeEventListener("pageshow", onWake);
       window.removeEventListener("focus", onWake);
       window.removeEventListener("online", refresh);
+      window.removeEventListener("kc-location", refresh);
     };
   }, [refresh, status?.endsAt, status?.nextChange]);
 

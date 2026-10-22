@@ -20,6 +20,9 @@ export default function CityInput({
   id,
   autoFocus,
   onBlur,
+  // What to say after "type it as you say it" when a town is not found. A
+  // guest has no Settings to point to.
+  missHint = 'Shabbos times can be set in Settings.',
   ...rest
 }) {
   const [open, setOpen] = useState(false);
@@ -116,8 +119,8 @@ export default function CityInput({
       {open && (state === 'none' || state === 'failed') && (
         <p className="mt-1 text-xs leading-5 text-brand-muted">
           {state === 'failed'
-            ? 'We cannot reach the place lookup right now — type your town as you say it and carry on. Shabbos times can be set in Settings.'
-            : 'Not on our list yet — type it as you say it and carry on. Shabbos times can be set in Settings.'}
+            ? `We cannot reach the place lookup right now — type your town as you say it and carry on. ${missHint}`
+            : `Not on our list yet — type it as you say it and carry on. ${missHint}`}
         </p>
       )}
       {open && options.length > 0 && (

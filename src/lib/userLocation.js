@@ -2,6 +2,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/api/client';
 import { listingPoint, placePoint } from './nearby.js';
+import { readSaved, save } from './savedLocation.js';
+
+export { readSaved };
 
 // Where the person using the site is, for "closest first" and "near you".
 //
@@ -9,14 +12,12 @@ import { listingPoint, placePoint } from './nearby.js';
 //   1. a member's own location, saved to their profile from the home city
 //      they gave us (see @/hooks/useDetectLocation)
 //   2. a place a guest picked, or their browser's location once they agreed
-//      to share it — kept in this browser only, never sent anywhere
+//      to share it — kept in this browser (see @/lib/savedLocation)
 //   3. nothing: callers fall back to their usual order and may offer `ask`
 //
 // A member's profile city without coordinates yet (the lookup runs in the
 // background) is placed at the centre of that city (see @/lib/nearby), which
 // is near enough to tell Brooklyn from Minnesota.
-
-const KEY = 'kc_my_location';
 
 const rad = (x) => x * Math.PI / 180;
 /** Miles between two points, as the crow flies. */
@@ -38,19 +39,17 @@ export function milesTo(here, provider) {
   return at ? milesBetween(here.lat, here.lng, at.lat, at.lng) : null;
 }
 
-function readSaved() {
-  try {
-    const saved = JSON.parse(localStorage.getItem(KEY) || 'null');
-    return saved && Number.isFinite(saved.lat) && Number.isFinite(saved.lng) ? saved : null;
-  } catch { return null; }
-}
-
-function save(value) {
-  try {
-    if (value) localStorage.setItem(KEY, JSON.stringify(value));
-    else localStorage.removeItem(KEY);
-  } catch { /* private window: it lasts until the page closes */ }
-  window.dispatchEvent(new Event('kc-location'));
+/**
+ * The city a member is placed in. Once they have a saved location (the one
+ * their Shabbos times are worked out for) that location's city is the answer
+ * everywhere, so search, "near you" and the zmanim never disagree: a member
+ * whose profile said Aventura but whose times were set for Boca Raton was
+ * shown Aventura in the search and Boca Raton above it.
+ */
+export function memberCity(me) {
+  if (!me) return '';
+  const own = hasPoint(me) ? me.city || me.home_city : me.home_city || me.city;
+  return String(own || '').trim();
 }
 
 /**
@@ -81,18 +80,18 @@ export function useUserLocation() {
       save(here);
       resolve(true);
       try {
-        const { city } = await api.geo.reverse(coords.latitude, coords.longitude);
-        if (city) save({ ...here, city });
+        const { city, country_code } = await api.geo.reverse(coords.latitude, coords.longitude);
+        if (city) save({ ...here, city, country: country_code || '' });
       } catch { /* the point is what matters; the name is for display */ }
     }, () => resolve(false), { timeout: 10000, maximumAge: 600000 });
   }), []);
   const choose = useCallback((place) => {
     if (!hasPoint(place)) return;
-    save({ lat: Number(place.latitude), lng: Number(place.longitude), city: place.city || place.label || '', source: 'chosen' });
+    save({ lat: Number(place.latitude), lng: Number(place.longitude), city: place.city || place.label || '', country: place.country_code || '', source: 'chosen' });
   }, []);
   const forget = useCallback(() => save(null), []);
 
-  const profileCity = String(me?.home_city || me?.city || '').trim();
+  const profileCity = memberCity(me);
   let here = null;
   if (hasPoint(me)) here = { lat: Number(me.latitude), lng: Number(me.longitude), city: profileCity, source: 'profile' };
   else if (saved) here = saved;

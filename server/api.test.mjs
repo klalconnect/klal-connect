@@ -1160,6 +1160,14 @@ const both = await call('PUT', `/entities/Provider/${gId}`, { token: admin, body
 ok(both.data?.kitchen === 'meat_dairy', 'the kitchen can be changed on an edit', JSON.stringify(both.data?.kitchen));
 const notFood = await call('PUT', `/entities/Provider/${gId}`, { token: admin, body: { category: 'Legal' } });
 ok(notFood.data?.kitchen === '', 'the kitchen label comes down when a listing leaves the food category', JSON.stringify(notFood.data?.kitchen));
+// Jewish owned is the default; only an explicit true marks a listing Not Jewish owned.
+ok(grill.data?.provider?.not_jewish_owned === false, 'a new listing is Jewish owned unless picked otherwise', JSON.stringify(grill.data?.provider?.not_jewish_owned));
+const hvac = await call('POST', '/functions/createListing', { token: admin, body: { name: 'Ownership HVAC', category: 'Legal', short_description: 'Heating.', not_jewish_owned: true } });
+ok(hvac.data?.provider?.not_jewish_owned === true, 'a listing can be added as Not Jewish owned', JSON.stringify(hvac.data?.provider));
+const junkOwned = await call('PUT', `/entities/Provider/${hvac.data?.provider?.id}`, { token: admin, body: { not_jewish_owned: 'yes' } });
+ok(junkOwned.data?.not_jewish_owned === false, 'only a real true marks a listing Not Jewish owned', JSON.stringify(junkOwned.data?.not_jewish_owned));
+const reOwned = await call('PUT', `/entities/Provider/${gId}`, { token: admin, body: { not_jewish_owned: true } });
+ok(reOwned.data?.not_jewish_owned === true, 'ownership can be changed on an edit', JSON.stringify(reOwned.data?.not_jewish_owned));
 const dupes = await call('PUT', `/entities/Provider/${kId}`, { token: ownerTok, body: { service_areas: 'Boca Raton, Boca Raton, Delray Beach' } });
 ok(JSON.stringify(dupes.data?.service_areas) === JSON.stringify(['Boca Raton', 'Delray Beach']),
   'an edit does not store the same area twice', JSON.stringify(dupes.data?.service_areas));

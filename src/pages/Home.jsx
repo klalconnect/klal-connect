@@ -18,6 +18,7 @@ import { postedAt } from '@/lib/scheduledPosts';
 import { categoryLabel } from '@/lib/categories';
 import { nearbyListings } from '@/lib/nearby';
 import useNearHere from '@/hooks/useNearHere';
+import { useUserLocation } from '@/lib/userLocation';
 import NearYouPrompt from '@/components/NearYouPrompt';
 
 // The words people actually use, as searches rather than category filters —
@@ -47,15 +48,15 @@ export default function Home() {
     queryKey: ['categories'],
     queryFn: () => api.entities.Category.list('order'),
   });
-  // Only to seed the community — a signed-in member should not have to tell us
-  // where they live twice.
+  // Only to seed the community — nobody should have to tell us where they are
+  // twice. The same place the Shabbos times use: a member's saved location,
+  // or the community a guest picked.
+  const homeCity = useUserLocation().city;
   const { data: me = null } = useQuery({
     queryKey: ['me', 'home'],
     queryFn: async () => (await api.auth.hasAccount() ? api.auth.me() : null),
     retry: false,
   });
-
-  const homeCity = String(me?.home_city || me?.city || '').trim();
   const [community, setCommunity, chosen] = useCommunity(homeCity);
 
   // What is available where they are. A listing that serves everywhere serves
@@ -206,7 +207,7 @@ function FeedPreview() {
   });
   return <section>
     <div className="section-head">
-      <div><span className="eyebrow">KLAL FEED</span><h2 className="title">Happening now</h2></div>
+      <div><span className="eyebrow">KLAL FEED</span><h2 className="title">Trending now</h2></div>
       <Link to="/feed" className="text-sm font-semibold text-brand-teal">See the feed</Link>
     </div>
     {isLoading && <div className="loading">Loading feed…</div>}
