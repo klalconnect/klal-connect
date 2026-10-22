@@ -10,6 +10,7 @@ import { useDetectLocation } from '@/hooks/useDetectLocation';
 import AccountRequiredModal from '@/components/AccountRequiredModal';
 import ErrorBoundary from '@/components/ErrorBoundary';
 import BackToTop from '@/components/BackToTop';
+import SiteFooter from '@/components/SiteFooter';
 import { accountLinks } from '@/components/GuestPrompt';
 import { useAuth } from '@/lib/AuthContext';
 
@@ -98,6 +99,7 @@ export default function AppLayout() {
         loading on a slow connection should swap the page, not unmount the
         header and the bottom nav down to a bare "Loading…". */}
     <main><ErrorBoundary><Suspense fallback={<div className="loading">Loading…</div>}><Outlet/></Suspense></ErrorBoundary></main>
+    <SiteFooter className="mt-10"/>
     <BackToTop/>
     {/* repeat(6,minmax(0,1fr)), not grid-cols-6: `1fr` is minmax(auto,1fr), so
         each column refused to go narrower than its own label — "Resources"

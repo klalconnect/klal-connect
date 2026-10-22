@@ -2,7 +2,7 @@ import { lazy } from 'react';
 import { Toaster } from "@/components/ui/toaster"
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
-import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import { BrowserRouter as Router, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
@@ -38,10 +38,18 @@ import Conversation from '@/pages/Conversation';
 import Login from '@/pages/Login';
 import Join from '@/pages/Join';
 import Privacy from '@/pages/Privacy';
+import Terms from '@/pages/Terms';
+import About from '@/pages/About';
+import Contact from '@/pages/Contact';
 import Welcome from '@/pages/Welcome';
 import Register from '@/pages/Register';
 import ForgotPassword from '@/pages/ForgotPassword';
 import ResetPassword from '@/pages/ResetPassword';
+
+// /signup is what people type; the page lives at /register. The server
+// redirects a fresh load, this covers a link followed inside the app. The
+// query string rides along so returnTo and reason survive.
+const SignupRedirect = () => { const { search } = useLocation(); return <Navigate to={`/register${search}`} replace />; };
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -94,11 +102,15 @@ const AuthenticatedApp = () => {
         <Route path="/settings" element={<Settings />} />
         <Route path="/welcome" element={<Welcome />} />
         <Route path="/privacy" element={<Privacy />} />
+        <Route path="/terms" element={<Terms />} />
+        <Route path="/about" element={<About />} />
+        <Route path="/contact" element={<Contact />} />
         <Route path="/admin" element={<Admin />} />
       </Route>
       <Route path="/login" element={<Login />} />
       <Route path="/join/:code" element={<Join />} />
       <Route path="/register" element={<Register />} />
+      <Route path="/signup" element={<SignupRedirect />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="*" element={<PageNotFound />} />
