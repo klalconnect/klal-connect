@@ -10,6 +10,7 @@ import ResourceCard from '@/components/ResourceCard';
 import NearYouPrompt from '@/components/NearYouPrompt';
 import useNearHere from '@/hooks/useNearHere';
 import { nearbyListings } from '@/lib/nearby';
+import { ownershipRank } from '@/lib/ownership';
 import { readStoredCommunity } from '@/lib/community';
 
 export default function Directory(){
@@ -98,9 +99,10 @@ export default function Directory(){
 
 // Nearest towns first, `rank` deciding within each: the three best of the
 // closest few towns, not the three most used anywhere within the hour.
+// Jewish-owned ones come first among those.
 function nearbyFirst(rows,rank){
   const nearest=rows.slice(0,12);
-  return [...nearest].sort(rank).concat(rows.slice(12));
+  return [...nearest].sort((a,b)=>ownershipRank(a,b)||rank(a,b)).concat(rows.slice(12));
 }
 
 function ProviderSection({ title, items, more='/browse' }){
