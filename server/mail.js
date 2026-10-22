@@ -19,8 +19,15 @@ export async function sendMail({ to, subject, text, html }) {
     body: JSON.stringify({ from: process.env.KC_MAIL_FROM, to: [to], subject, text, html: html || `<pre style="font: 15px/1.5 -apple-system, system-ui, sans-serif; white-space: pre-wrap">${escapeHtml(text)}</pre>` }),
   });
   if (!res.ok) {
+    // The provider's own words are for the server log only. Callers turn
+    // this into a plain sentence before anything reaches a person.
     const body = await res.text().catch(() => '');
-    throw new Error(`Email send failed (${res.status}): ${body.slice(0, 200)}`);
+    const err = new Error(`Email send failed (${res.status}): ${body.slice(0, 200)}`);
+    err.providerStatus = res.status;
+    // 400/422 is Resend refusing the address itself (example.com, a typo,
+    // a malformed domain). 401/403/429/5xx are on our side or theirs.
+    err.addressRejected = res.status === 400 || res.status === 422;
+    throw err;
   }
   return res.json();
 }

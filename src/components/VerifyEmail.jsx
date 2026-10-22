@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
 import AuthLayout from '@/components/AuthLayout';
 import { toast } from '@/components/ui/use-toast';
+import { friendlyAuthError } from '@/lib/authErrors';
 
 // The six-digit email check. Sign-up lands here right after registering; log
 // in lands here when the account never finished verifying. Both go on to
@@ -21,7 +22,7 @@ export default function VerifyEmail({ email, onVerified, devCode }) {
       if (result?.access_token) api.auth.setToken(result.access_token);
       onVerified(result);
     } catch (err) {
-      setError(err.message || 'That code is not right');
+      setError(friendlyAuthError(err));
     } finally { setLoading(false); }
   };
 
@@ -30,7 +31,7 @@ export default function VerifyEmail({ email, onVerified, devCode }) {
     try {
       await api.auth.resendOtp(email);
       toast({ title: 'Code sent', description: 'Check your email for the new code.' });
-    } catch (err) { setError(err.message || 'Could not resend the code'); }
+    } catch (err) { setError(friendlyAuthError(err)); }
   };
 
   return <AuthLayout icon={Mail} title="Check your email" subtitle={`We sent a 6-digit code to ${email}`}>

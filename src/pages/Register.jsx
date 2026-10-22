@@ -9,7 +9,10 @@ import AuthLayout from "@/components/AuthLayout";
 import PasswordInput from "@/components/PasswordInput";
 import VerifyEmail from "@/components/VerifyEmail";
 import GoogleButton from "@/components/GoogleButton";
+import EmailSuggestion from "@/components/EmailSuggestion";
 import { safeReturnTo } from "@/lib/authReturnTo";
+import { suggestEmail } from "@/lib/emailCheck";
+import { friendlyAuthError } from "@/lib/authErrors";
 
 // A new account goes through the welcome cards first, then on to wherever
 // it was headed.
@@ -23,22 +26,30 @@ export default function Register() {
   // Set once the server has emailed a verification code; null until then, and
   // never when the server signed the account in directly.
   const [verify, setVerify] = useState(null);
+  // A likely typo caught before sending ("gmial.com"), and the address the
+  // person already said is right, so they are asked only once.
+  const [suggestion, setSuggestion] = useState(null);
+  const [keptEmail, setKeptEmail] = useState(null);
   const reasonReport = new URLSearchParams(window.location.search).get("reason") === "report";
   const loginLink = (() => { const p = new URLSearchParams(); const rt = safeReturnTo(); if (rt !== "/") p.set("returnTo", rt); if (reasonReport) p.set("reason", "report"); return "/login" + (p.toString() ? "?" + p.toString() : ""); })();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+    const typed = email.trim();
+    const fix = typed !== keptEmail ? suggestEmail(typed) : null;
+    if (fix) { setSuggestion(fix); return; }
+    setSuggestion(null);
     setLoading(true);
     try {
-      const result = await api.auth.register({ email, password });
+      const result = await api.auth.register({ email: typed, password });
       if (result?.access_token) { window.location.href = welcomeUrl(); return; }
       // The server hands the code back only in local dev; the production
       // bundle must not even know the field exists, so the read is behind a
       // build-time constant Vite folds away.
-      setVerify({ email, devCode: import.meta.env.DEV ? result?.dev_code : undefined });
+      setVerify({ email: typed, devCode: import.meta.env.DEV ? result?.dev_code : undefined });
     } catch (err) {
-      setError(err.message || "Registration failed");
+      setError(friendlyAuthError(err));
     } finally {
       setLoading(false);
     }
@@ -88,11 +99,16 @@ export default function Register() {
               autoFocus
               placeholder="you@example.com"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => { setEmail(e.target.value); setSuggestion(null); }}
               className="pl-10 h-12"
               required
             />
           </div>
+          <EmailSuggestion
+            suggestion={suggestion}
+            onAccept={() => { setEmail(suggestion); setSuggestion(null); }}
+            onKeep={() => { setKeptEmail(email.trim()); setSuggestion(null); }}
+          />
         </div>
         <div className="space-y-2">
           <Label htmlFor="password">Password</Label>

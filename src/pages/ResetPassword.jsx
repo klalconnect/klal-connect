@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Lock, Loader2 } from "lucide-react";
 import AuthLayout from "@/components/AuthLayout";
+import { friendlyAuthError } from "@/lib/authErrors";
 import PasswordInput from "@/components/PasswordInput";
 
 export default function ResetPassword() {
@@ -34,7 +35,7 @@ export default function ResetPassword() {
       await api.auth.resetPassword({ email: email.trim(), resetToken, newPassword });
       window.location.href = "/login";
     } catch (err) {
-      setError(err.message || "Failed to reset password");
+      setError(friendlyAuthError(err));
     } finally {
       setLoading(false);
     }

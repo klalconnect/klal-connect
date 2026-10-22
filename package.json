@@ -13,7 +13,7 @@
     "lint": "eslint . --quiet",
     "lint:fix": "eslint . --fix",
     "preview": "vite preview",
-    "test": "node src/lib/shabbosState.test.mjs && node src/lib/search.test.mjs && node src/lib/minyanim.test.mjs && KC_STORE=memory node server/geocode.test.mjs && KC_STORE=memory node server/translate.test.mjs && node server/no-dev-code.test.mjs && node server/api.test.mjs",
+    "test": "node src/lib/shabbosState.test.mjs && node src/lib/search.test.mjs && node src/lib/minyanim.test.mjs && KC_STORE=memory node server/geocode.test.mjs && KC_STORE=memory node server/translate.test.mjs && node server/no-dev-code.test.mjs && KC_STORE=memory node server/mail-errors.test.mjs && node server/api.test.mjs",
     "create-admin": "node --env-file-if-exists=.env.local server/create-admin.js",
     "migrate": "node --env-file-if-exists=.env.local server/migrate.js",
     "test:gate": "node scripts/shabbos-gate-check.mjs ${KC_TEST_EMAIL:-} ${KC_TEST_PASSWORD:-}",
