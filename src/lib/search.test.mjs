@@ -166,4 +166,20 @@ ok('the Country box starts on your own country, unless the place is elsewhere', 
   assert.equal(startingCountry(W, 'US', 'Bro'), 'United States'); // still typing
   assert.equal(startingCountry(W, 'US', 'Lakewood'), 'United States'); // nothing listed there yet
 });
+ok('Where suggestions: the country in the box, names starting with the letters first, nearest first', () => {
+  const W = [
+    L('Boise Kosher', 'Food & Catering', 'Caterer', 'Boise', 'ID'),
+    L('Bois Bagels', 'Food & Catering', 'Bakery', 'Boisbriand', 'QC', { country: 'Canada' }),
+    ...[1, 2, 3].map((n) => L(`Paris ${n}`, 'Food & Catering', 'Caterer', 'Fontenay-Sous-Bois', '', { country: 'France' })),
+    L('Clichy Deli', 'Food & Catering', 'Caterer', 'Clichy-Sous-Bois', '', { country: 'France' }),
+  ];
+  const labels = (country, near) => suggestPlaces('boi', W, country, null, near).map((s) => s.label);
+  assert.deepEqual(labels('United States'), ['Boise']);
+  // Everywhere: starts-with first, though Fontenay has the most listings.
+  assert.deepEqual(labels('').slice(0, 2).sort(), ['Boisbriand', 'Boise']);
+  assert.ok(labels('').indexOf('Fontenay-Sous-Bois') > 1);
+  // Near Montreal, Boisbriand comes before Boise.
+  assert.deepEqual(labels('', { lat: 45.5, lng: -73.6 }).slice(0, 2), ['Boisbriand', 'Boise']);
+  assert.deepEqual(labels('', { lat: 43.6, lng: -116.2 }).slice(0, 2), ['Boise', 'Boisbriand']);
+});
 console.log(`\n${passed} passed`);

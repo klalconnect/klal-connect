@@ -67,6 +67,10 @@ export function countryName(text) {
   return BY_NAME.get(norm(raw)) || '';
 }
 
+const CODE_OF = new Map(COUNTRIES.map(([code, name]) => [name, code]));
+/** The two-letter code for a country's name ("Israel" -> "IL"), or ''. */
+export const countryCode = (name) => CODE_OF.get(countryName(name)) || '';
+
 /**
  * The countries whose name, or a name people call them, has a word starting
  * with `text`: "bah" is the Bahamas, "kingdom" and "eng" the United Kingdom.

@@ -49,6 +49,9 @@ export default function Browse() {
   const here = urlLat && urlLng ? { lat: urlLat, lng: urlLng } : me.lat != null ? { lat: me.lat, lng: me.lng } : null;
   const located = Boolean(here);
   const country = pickedCountry ?? startingCountry(providers, me.country, place);
+  // Where suggestions keep to the country in the box, shown or picked, and
+  // put places near the person first.
+  const near = me.lat != null && me.lng != null ? { lat: me.lat, lng: me.lng } : null;
   // What they picked, if anything; until then the default follows the location,
   // which for a member arrives a moment after the page opens.
   const [picked, setSort] = useState('');
@@ -256,7 +259,7 @@ export default function Browse() {
         suggest={(text) => suggestKeywords(text, providers, categories, place, country)}
         placeholder="Plumber, therapist, gemach…" aria-label="What are you looking for?" />
       <SuggestInput wrapperClassName="md:col-span-2" value={place} onChange={choosePlace} onPick={(item) => choosePlace(item.value)}
-        suggest={(text) => suggestPlaces(text, providers, pickedCountry || '', countPlace)} suggestMore={(text) => (text.length >= 2 ? lookupPlaces(text) : [])} minLength={0}
+        suggest={(text) => suggestPlaces(text, providers, country, countPlace, near)} suggestMore={(text) => (text.length >= 2 ? lookupPlaces(text, { country, near }) : [])} minLength={0}
         placeholder={country ? `All of ${country}` : 'Any city, state or ZIP'} aria-label="Where: city, state or ZIP" />
       <CountrySelect wrapperClassName="md:col-span-2" labelClassName="left-3 right-9 mt-0.5 text-sm" className="field" providers={providers} value={country} onChange={chooseCountry} />
       <select className="field md:col-span-2" value={category} onChange={(e) => setCategory(e.target.value)}>

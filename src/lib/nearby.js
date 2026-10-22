@@ -79,7 +79,7 @@ export function placePoint({ lat, lng, city, state, country } = {}) {
 // Kept here rather than imported from @/lib/userLocation, which needs the
 // API client and React: this file is also run by the build script under Node.
 const rad = (d) => (d * Math.PI) / 180;
-function milesBetween(lat1, lng1, lat2, lng2) {
+export function milesBetween(lat1, lng1, lat2, lng2) {
   const h = Math.sin(rad(lat2 - lat1) / 2) ** 2 + Math.cos(rad(lat1)) * Math.cos(rad(lat2)) * Math.sin(rad(lng2 - lng1) / 2) ** 2;
   return 3958.8 * 2 * Math.asin(Math.sqrt(h));
 }

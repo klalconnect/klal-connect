@@ -59,15 +59,22 @@ function qualifiers(t) {
 // "Deerfield Beach", "deerf", "boise id", "Boise, Idaho", "Netanya Israel".
 // A town whose name starts with what was typed, the exact name first, then the
 // biggest — so "spring" offers Springfield before a village called Springe.
-export async function findTowns(query, limit = 8) {
+//
+// `country` (a code, "US") keeps to towns in that country. `near` ({ lat, lng })
+// puts the closest first, among the biggest few dozen that match, so a hamlet
+// next door does not crowd out the city people mean.
+export async function findTowns(query, limit = 8, { country = '', near = null } = {}) {
   const q = fold(query);
   if (q.length < 2) return [];
   await load();
   const pool = byStart.get(q.slice(0, 2)) || [];
   const hits = [];
   for (const t of pool) {
+    if (country && t.country_code !== country) continue;
     let exact, qualified = false;
-    if (t.key.startsWith(q)) exact = t.key === q;
+    // An exact name only jumps the queue from four letters on: "boi" is
+    // Boise first, not a village in Nigeria called Boi.
+    if (t.key.startsWith(q)) exact = q.length >= 4 && t.key === q;
     else if (q.startsWith(`${t.key} `)) {
       // The rest of the query has to name this town's state or country.
       const rest = q.slice(t.key.length + 1);
@@ -78,8 +85,13 @@ export async function findTowns(query, limit = 8) {
   }
   // The pool is already biggest first, and sort is stable.
   hits.sort((a, b) => Number(b.exact) - Number(a.exact));
+  let picked = hits;
+  if (near) {
+    const km = (t) => distanceKm(near.lat, near.lng, t.latitude, t.longitude);
+    picked = hits.slice(0, 40).sort((a, b) => Number(b.exact) - Number(a.exact) || km(a.t) - km(b.t));
+  }
   // `qualified`: the query named this town's state or country as well.
-  return hits.slice(0, limit).map(({ t, qualified }) => ({ ...t, qualified }));
+  return picked.slice(0, limit).map(({ t, qualified }) => ({ ...t, qualified }));
 }
 
 // The nearest town to a point, for naming where "Use my location" landed when

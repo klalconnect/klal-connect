@@ -326,10 +326,19 @@ const fromTown = (t) => ({ ...fromPlace(t), source: 'world' });
 
 // The curated communities first, then any other town in the world whose name
 // starts with what was typed. Both answer without a key or a request.
-async function knownPlaces(q, limit) {
-  const local = findPlaces(q, limit).map(fromPlace);
+async function knownPlaces(q, limit, { country = '', near = null } = {}) {
+  let local = findPlaces(q, country ? 50 : limit).filter((p) => !country || p.country_code === country).map(fromPlace);
+  // Nearest first among the curated ones too, names starting with what was
+  // typed ahead of the rest.
+  if (near) {
+    const fq = String(q).trim().toLowerCase();
+    const km = (p) => distanceKm(near.lat, near.lng, p.latitude, p.longitude);
+    local = local.map((p, i) => ({ p, i })).sort((a, b) =>
+      Number(b.p.city.toLowerCase().startsWith(fq)) - Number(a.p.city.toLowerCase().startsWith(fq)) || km(a.p) - km(b.p)).map(({ p }) => p);
+  }
+  local = local.slice(0, limit);
   if (local.length >= limit) return local;
-  const towns = await findTowns(q, limit);
+  const towns = await findTowns(q, limit, { country, near });
   // "Lakewood CO" names its state, so that Lakewood beats the curated one in
   // New Jersey that merely shares the name. Where the named town is a curated
   // community anyway ("lakewood nj"), the curated entry keeps its place.
@@ -445,7 +454,9 @@ export async function reverseGeocode(lat, lon, { offline = false } = {}) {
 
 // `offline` answers only from the lists shipped with the app: what a signed-out
 // visitor gets, since nobody can spend a provider's quota that way.
-export async function searchPlaces(query, limit = 8, { offline = false } = {}) {
+// `country` (a code) keeps every answer in that country; `near` ({ lat, lng })
+// puts the closest known places first.
+export async function searchPlaces(query, limit = 8, { offline = false, country = '', near = null } = {}) {
   const q = String(query || '').trim();
   if (q.length < 2) throw new GeoError('Enter at least two characters.', 400);
   const capped = Math.min(Math.max(Number(limit) || 8, 1), 10);
@@ -454,7 +465,8 @@ export async function searchPlaces(query, limit = 8, { offline = false } = {}) {
   // world, instantly and without a key. A provider only sees what is left — a
   // street address, a village too small for the list — and if there is no
   // usable provider, the known places are still an answer rather than a 503.
-  const local = await knownPlaces(q, capped);
+  const cc = /^[A-Z]{2}$/.test(String(country || '').toUpperCase()) ? String(country).toUpperCase() : '';
+  const local = await knownPlaces(q, capped, { country: cc, near });
   const address = looksLikeAddress(q);
   // Nothing found here is an answer too: the whole world list was asked, so
   // "not on our list" is true, where "cannot reach the lookup" was not.
@@ -501,7 +513,7 @@ export async function searchPlaces(query, limit = 8, { offline = false } = {}) {
     if (local.length || !address || !failure) return local;
     throw failure;
   }
-  return mergePlaces(local, results, capped);
+  return mergePlaces(local, cc ? results.filter((r) => r.country_code === cc) : results, capped);
 }
 
 // Exact addresses first, then the curated towns, then the provider's other
