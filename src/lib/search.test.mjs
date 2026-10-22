@@ -1,6 +1,6 @@
 // Directory search: plurals, typos, synonyms, places, and every word counting.
 import assert from 'node:assert/strict';
-import { searchDirectory, suggestPlaces } from './search.js';
+import { placeCounter, searchDirectory, suggestPlaces } from './search.js';
 import { countryOf, countriesFrom, placeLine } from './countries.js';
 
 let passed = 0;
@@ -132,5 +132,24 @@ ok('the Where box reacts from the first letters, for countries and states too', 
   assert.equal(suggestPlaces('Isr', B)[0].label, 'Israel');
   assert.equal(suggestPlaces('Flo', B)[0].label, 'Florida');
   assert.equal(suggestPlaces('Eng', B).length, 0);
+});
+ok('place counts match what picking the place shows', () => {
+  const H = [
+    L('Grill One', 'Food & Catering', 'Restaurant', 'Hollywood', 'FL'),
+    L('Grill Two', 'Food & Catering', 'Restaurant', 'Hollywood', 'FL'),
+    L('Young Israel of Hollywood', 'Shuls', 'Shul', 'Hollywood', 'FL'),
+    L('Hills Bakery', 'Food & Catering', 'Bakery', 'Hollywood Hills', 'FL'),
+    L('Relief Resources', 'Health', 'Therapist', 'Brooklyn', 'NY', { service_areas: ['Nationwide'] }),
+  ];
+  const shown = (where, keep = () => true) => searchDirectory(H, { where }).results.filter((r) => !r.wide && keep(r.provider)).length;
+  const first = suggestPlaces('Hollywood', H)[0];
+  assert.equal(first.label, 'Hollywood');
+  assert.equal(first.count, shown('Hollywood')); // Hollywood Hills too, not the nationwide one
+  assert.equal(first.count, 4);
+  // With a category chosen, the number is that category's.
+  const food = (p) => p.category === 'Food & Catering';
+  assert.equal(suggestPlaces('Hollywood', H, '', placeCounter(H, { keep: food }))[0].count, shown('Hollywood', food));
+  // A place with nothing for the search is not offered.
+  assert.deepEqual(suggestPlaces('Hollywood', H, '', placeCounter(H, { q: 'shul' })).map((s) => [s.label, s.count]), [['Hollywood', 1]]);
 });
 console.log(`\n${passed} passed`);

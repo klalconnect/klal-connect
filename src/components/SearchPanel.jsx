@@ -1,11 +1,11 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Search, MapPin, LocateFixed, Globe } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/api/client';
 import SuggestInput from '@/components/SuggestInput';
 import CountrySelect from '@/components/CountrySelect';
-import { suggestKeywords, suggestPlaces } from '@/lib/search';
+import { placeCounter, suggestKeywords, suggestPlaces } from '@/lib/search';
 import { lookupPlaces } from '@/lib/placeLookup';
 import { providerPath } from '@/lib/paths';
 
@@ -33,6 +33,10 @@ export default function SearchPanel({ defaultLocation = '', autoFocus = false })
     queryKey: ['categories'],
     queryFn: () => api.entities.Category.list('order'),
   });
+
+  // Each place is counted with what is typed in the first box, so its number
+  // is what the results page will say.
+  const countPlace = useMemo(() => placeCounter(providers, { q: query, country }), [providers, query, country]);
 
   const go = (q, where, category = '') => navigate(`/browse?q=${encodeURIComponent(q)}&location=${encodeURIComponent(where)}${country ? `&country=${encodeURIComponent(country)}` : ''}${category ? `&category=${encodeURIComponent(category)}` : ''}`);
   // Picking a country empties a Where box filled in for you (your own
@@ -71,7 +75,7 @@ export default function SearchPanel({ defaultLocation = '', autoFocus = false })
       <MapPin className="text-brand-teal" />
       <SuggestInput wrapperClassName="w-full" value={location} onChange={(v) => { typed.current = true; setLocation(v); }}
         onPick={(item) => { typed.current = true; setLocation(item.value); }}
-        suggest={(text) => suggestPlaces(text, providers, country)} suggestMore={(text) => (text.length >= 2 ? lookupPlaces(text) : [])} minLength={0}
+        suggest={(text) => suggestPlaces(text, providers, country, countPlace)} suggestMore={(text) => (text.length >= 2 ? lookupPlaces(text) : [])} minLength={0}
         className="w-full bg-transparent outline-none" placeholder={country ? `All of ${country}` : 'Any city, state or ZIP'} aria-label="Where: city, state or ZIP" />
     </label>
     <label className="flex items-center gap-3 px-3 py-3 md:w-48 md:flex-none">

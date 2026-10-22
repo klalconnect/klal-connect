@@ -27,8 +27,17 @@ export function servesEverywhere(provider) {
 
 // Place matching is by city, state or ZIP, never by a fragment of text: a
 // substring test let "FL" match Flushing, NY, and "LA" match Atlanta.
-const norm = (s) => String(s ?? '').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '')
+const normalize = (s) => String(s ?? '').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '')
   .replace(/\./g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+// The same few thousand city and state names are normalised on every
+// keystroke, so each is worked out once.
+const normed = new Map();
+const norm = (s) => {
+  if (s == null || s === '') return '';
+  let n = normed.get(s);
+  if (n === undefined) { n = normalize(s); if (normed.size < 50000) normed.set(s, n); }
+  return n;
+};
 
 const STATES = {
   al: 'alabama', ak: 'alaska', az: 'arizona', ar: 'arkansas', ca: 'california', co: 'colorado', ct: 'connecticut',
@@ -138,7 +147,7 @@ export function placeMatcher(where, providers = null, { everywhere = true } = {}
   const named = (name) => name === city || name.startsWith(`${city} `);
   const exact = (p) => named(cityOf(p)) || named(norm(p?.neighborhood)) || areasOf(p).some(named);
   // The countries this city is in, going by the listings there.
-  const countriesOf = (test) => (providers ? new Set(providers.filter(test).map(countryOf).filter(Boolean)) : null);
+  const countriesOf = (test) => (providers && everywhere ? new Set(providers.filter(test).map(countryOf).filter(Boolean)) : null);
   if (!providers || providers.some(exact)) {
     const test = (p) => exact(p) && stateOk(p);
     return everywhereOr(test, countriesOf(test));
