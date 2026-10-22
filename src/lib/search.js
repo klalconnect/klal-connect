@@ -329,16 +329,17 @@ export function suggestKeywords(raw, providers, categories, where = '', country 
  * already chosen narrows it. `countFor(place)` lets the page count with its
  * own filters; a place it would show nothing for is left out.
  */
-export function suggestPlaces(raw, providers, country = '', countFor = null) {
+// `near` ({ lat, lng }, optional) puts the places closest to the person first.
+export function suggestPlaces(raw, providers, country = '', countFor = null, near = null) {
   const count = countFor || placeCounter(providers, { country });
-  return listPlaces(raw, providers, country).flatMap((s) => {
+  return listPlaces(raw, providers, country, near).flatMap((s) => {
     if (s.kind !== 'place' || !s.value) return [s];
     const n = count(s.value);
     return n ? [{ ...s, count: n }] : [];
   });
 }
 
-function listPlaces(raw, providers, country) {
+function listPlaces(raw, providers, country, near) {
   const text = String(raw || '').trim();
   const everywhere = { group: 'Places with listings', kind: 'place', label: 'Everywhere', value: '', hint: country ? `all of ${country}` : 'all communities' };
   if (!text) return [everywhere];
@@ -349,7 +350,7 @@ function listPlaces(raw, providers, country) {
   const countries = countriesFrom(here).filter((c) => wanted.has(c.country)).slice(0, 2)
     .map((c) => ({ group: 'Places with listings', kind: 'place', label: c.country, value: c.country, hint: 'country', count: c.count }));
   const states = (!country || country === US) && text.length >= 2 ? stateSuggestions(text, here) : [];
-  return [...('everywhere'.startsWith(text.toLowerCase()) ? [everywhere] : []), ...countries, ...states, ...placeSuggestions(text, here)].slice(0, 8);
+  return [...('everywhere'.startsWith(text.toLowerCase()) ? [everywhere] : []), ...countries, ...states, ...placeSuggestions(text, here, near)].slice(0, 8);
 }
 
 // US states with listings whose name starts a word with what was typed.

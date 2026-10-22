@@ -40,6 +40,9 @@ export default function SearchPanel({ defaultLocation = '', autoFocus = false })
   });
   const me = useUserLocation();
   const country = picked ?? startingCountry(providers, me.country, location);
+  // Where suggestions keep to the country in the box, shown or picked, and
+  // put places near the person first.
+  const near = me.lat != null && me.lng != null ? { lat: me.lat, lng: me.lng } : null;
 
   // Each place is counted with what is typed in the first box, so its number
   // is what the results page will say.
@@ -98,7 +101,7 @@ export default function SearchPanel({ defaultLocation = '', autoFocus = false })
       <MapPin className="text-brand-teal" />
       <SuggestInput id={whereId} wrapperClassName="w-full" value={location} onChange={(v) => { typed.current = true; setLocation(v); setLocationOff(false); }}
         onPick={(item) => { typed.current = true; setLocation(item.value); }}
-        suggest={(text) => suggestPlaces(text, providers, picked || '', countPlace)} suggestMore={(text) => (text.length >= 2 ? lookupPlaces(text) : [])} minLength={0}
+        suggest={(text) => suggestPlaces(text, providers, country, countPlace, near)} suggestMore={(text) => (text.length >= 2 ? lookupPlaces(text, { country, near }) : [])} minLength={0}
         className="w-full bg-transparent outline-none" placeholder={country ? `All of ${country}` : 'Any city, state or ZIP'} aria-label="Where: city, state or ZIP" />
     </label>
     <label className="flex items-center gap-3 px-3 py-3 md:w-48 md:flex-none">

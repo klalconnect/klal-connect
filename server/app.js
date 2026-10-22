@@ -1188,7 +1188,9 @@ app.get('/api/geo/reverse', async (req, res, next) => {
 
 app.get('/api/geo/search', async (req, res, next) => {
   try {
-    res.json(await searchPlaces(req.query.q, req.query.limit, { offline: !req.user || isGuest(req.user) }));
+    const lat = Number(req.query.lat), lng = Number(req.query.lng);
+    const near = req.query.lat != null && req.query.lng != null && Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+    res.json(await searchPlaces(req.query.q, req.query.limit, { offline: !req.user || isGuest(req.user), country: req.query.country, near }));
   } catch (err) { next(err); }
 });
 

@@ -1,5 +1,6 @@
 import { categoryLabel } from './categories.js';
 import { countryOf, US } from './countries.js';
+import { milesBetween, placePoint } from './nearby.js';
 
 // Search aliases.
 //
@@ -284,7 +285,7 @@ export function keywordSuggestions(raw, providers, categories = [], countFor = n
 }
 
 /** Places that have listings, matched against what was typed. */
-export function placeSuggestions(raw, providers) {
+export function placeSuggestions(raw, providers, near = null) {
   const text = String(raw || '').trim().toLowerCase();
   if (!text) return [];
   const byCity = new Map();
@@ -304,9 +305,19 @@ export function placeSuggestions(raw, providers) {
   for (const r of byCity.values()) r.state = [...r.states].sort((a, b) => b[1] - a[1])[0]?.[0] || '';
   // A city outside the US also answers to its country: "Bah" offers Nassau.
   const abroad = (r) => text.length >= 3 && r.country && r.country !== US && startsWord(r.country, text);
+  // A name that starts with what was typed beats one that only has it inside:
+  // "boi" is Boise before Clichy-sous-Bois. Within each, the nearest first
+  // when we know where the person is, else the one with the most listings.
+  const starts = (r) => r.city.toLowerCase().startsWith(text);
+  const far = (r) => {
+    if (!near) return 0;
+    const at = placePoint({ city: r.city, state: r.state, country: r.country });
+    return at ? milesBetween(near.lat, near.lng, at.lat, at.lng) : Infinity;
+  };
   return [...byCity.values()]
     .filter((r) => startsWord(r.city, text) || startsWord(`${r.city} ${r.state}`, text) || startsWord(`${r.city}, ${r.state}`, text) || abroad(r))
-    .sort((a, b) => b.count - a.count)
+    .map((r) => ({ ...r, starts: starts(r), miles: far(r) }))
+    .sort((a, b) => Number(b.starts) - Number(a.starts) || a.miles - b.miles || b.count - a.count)
     .slice(0, 6)
     .map((r) => ({ group: 'Places with listings', kind: 'place', label: r.city, value: r.city,
       hint: [r.state, r.country && r.country !== US && r.country !== r.state ? r.country : ''].filter(Boolean).join(', '), count: r.count }));

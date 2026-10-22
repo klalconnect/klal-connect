@@ -296,7 +296,9 @@ const functionsApi = {
 // nothing here.
 const geo = {
   reverse: (latitude, longitude) => request('GET', '/geo/reverse', { query: { lat: latitude, lon: longitude } }),
-  search: (q, limit = 8) => request('GET', '/geo/search', { query: { q, limit } }),
+  // `extra`: { country: 'US', lat, lng } keeps to one country and puts the
+  // nearest first.
+  search: (q, limit = 8, extra = {}) => request('GET', '/geo/search', { query: { q, limit, ...extra } }),
   ip: () => request('GET', '/geo/ip'),
   tz: (latitude, longitude) => request('GET', '/geo/tz', { query: { lat: latitude, lon: longitude } }),
 };
