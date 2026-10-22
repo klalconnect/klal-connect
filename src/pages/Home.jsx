@@ -203,7 +203,7 @@ function FeedPreview() {
   });
   return <section>
     <div className="section-head">
-      <div><span className="eyebrow">KLAL FEED</span><h2 className="title">Happening now</h2></div>
+      <div><span className="eyebrow">KLAL FEED</span><h2 className="title">Trending now</h2></div>
       <Link to="/feed" className="text-sm font-semibold text-brand-teal">See the feed</Link>
     </div>
     {isLoading && <div className="loading">Loading feed…</div>}
