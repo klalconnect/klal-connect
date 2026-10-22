@@ -199,6 +199,8 @@
   .lift { @apply hover:-translate-y-px hover:shadow-md active:translate-y-0 active:scale-[0.98] active:shadow-sm disabled:transform-none disabled:shadow-none motion-reduce:transform-none; }
   .primary { @apply lift inline-flex items-center justify-center gap-2 rounded-xl bg-brand-navy px-4 py-2.5 text-sm font-bold text-white shadow-sm hover:bg-brand-navy-hover; }
   .secondary, .action { @apply lift inline-flex items-center justify-center gap-2 rounded-xl border border-brand-line bg-brand-surface px-4 py-2.5 text-sm font-semibold text-brand-ink hover:border-brand-teal/40 hover:bg-brand-tint; }
+  /* Teal fill with the page colour as text: white on light teal, dark on the brighter dark-mode teal, readable in both. */
+  .clear-filters { @apply lift inline-flex items-center justify-center gap-2 rounded-xl bg-brand-teal px-4 py-2.5 text-sm font-bold text-brand-canvas shadow-sm hover:opacity-90; }
   .helper { @apply mt-2 block text-sm leading-6 text-brand-body; }
   .success { @apply rounded-xl bg-brand-tint text-sm font-semibold text-brand-success; }
   .form-grid { @apply grid gap-4 sm:grid-cols-2; }
