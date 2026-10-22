@@ -16,6 +16,9 @@ import { timeInZone, timeAgo } from '@/lib/time';
 import { POST_TYPE_BY_ID, BADGE_TONES, normalizePostType } from '@/lib/postTypes';
 import { postedAt } from '@/lib/scheduledPosts';
 import { categoryLabel } from '@/lib/categories';
+import { nearbyListings } from '@/lib/nearby';
+import useNearHere from '@/hooks/useNearHere';
+import NearYouPrompt from '@/components/NearYouPrompt';
 
 // The words people actually use, as searches rather than category filters —
 // "Plumbers" is not a category, and the alias layer in @/lib/searchTerms is
@@ -86,8 +89,6 @@ export default function Home() {
     .sort((a, b) => b.count - a.count || (a.order ?? 99) - (b.order ?? 99))
     .slice(0, 8), [categories, local]);
 
-  const where = community || 'your community';
-  const browseHere = `/browse${community ? `?location=${encodeURIComponent(community)}` : ''}`;
 
   return <div className="page-shell space-y-14 py-8 md:space-y-16 md:py-12">
     {/* The feed leads: Klal Connect is first a place where the frum business
@@ -141,7 +142,7 @@ export default function Home() {
       </div>
     </section>}
 
-    <LocalSection community={community} where={where} local={local} browseHere={browseHere} />
+    <LocalSection providers={providers} community={community} />
 
     <section>
       <div className="section-head">
@@ -233,41 +234,45 @@ function FeedPreview() {
   </section>;
 }
 
-// Everything that serves this community, plus the times that govern the week
+// The listings closest to the person, plus the times that govern the week
 // there. Shabbos times belong here, attached to a place, rather than in a band
 // across the top of the page: they matter enormously on Friday and not at all
 // to someone looking for an exterminator on Tuesday.
-function LocalSection({ community, where, local, browseHere }) {
-  const { status } = useShabbosStatus();
-  const shown = local.slice(0, 4);
-  const times = status?.cityLabel && (status.startsAt || status.endsAt) ? status : null;
+//
+// Only what is actually near: the nearest town's listings first, then the
+// next towns over, and nothing past an hour's drive (see @/lib/nearby). With
+// nothing that close the section is left out rather than filled with the
+// Bahamas; with no idea where the person is, it offers to find out.
+const byUse = (a, b) => (b.usage_count || 0) - (a.usage_count || 0) || String(b.created_date || '').localeCompare(String(a.created_date || ''));
 
+function LocalSection({ providers, community }) {
+  const { status } = useShabbosStatus();
+  const { origin, where, ask } = useNearHere(providers, community);
+  const near = useMemo(() => nearbyListings(providers, origin, { rank: byUse }), [providers, origin]);
+  const shown = near.slice(0, 4);
+  const times = status?.cityLabel && (status.startsAt || status.endsAt) ? status : null;
+  const timesBar = times && <div className="mb-4 flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg bg-brand-surface px-4 py-3 text-sm ring-1 ring-brand-line">
+    <span className="font-semibold text-brand-ink">{times.cityLabel}</span>
+    {times.startsAt && <span className="inline-flex items-center gap-1.5 text-brand-body"><Flame size={14} className="text-brand-gold-ink" />Candle lighting <b className="text-brand-ink">{timeInZone(times.startsAt, times.tzid)}</b></span>}
+    {times.endsAt && <span className="inline-flex items-center gap-1.5 text-brand-body"><Moon size={14} className="text-brand-teal" />Havdalah <b className="text-brand-ink">{timeInZone(times.endsAt, times.tzid)}</b></span>}
+    {times.parsha && <span className="text-brand-muted">{times.parsha}</span>}
+  </div>;
+
+  if (!origin) return <div>{timesBar}<NearYouPrompt ask={ask} title="Help near you">Or pick a community above.</NearYouPrompt></div>;
+  if (shown.length === 0) return timesBar || null;
+
+  const browseHere = community ? `/browse?location=${encodeURIComponent(community)}`
+    : `/browse?lat=${origin.lat}&lng=${origin.lng}`;
   return <section>
     <div className="section-head">
       <div>
         <span className="eyebrow">NEAR YOU</span>
-        <h2 className="title">Help that serves {where}</h2>
-        {local.length > 0 && <p className="helper">{local.length} {local.length === 1 ? 'listing' : 'listings'} available{community ? ` in ${community}` : ''} — including organizations that help nationwide.</p>}
+        <h2 className="title">Help {where ? `near ${where}` : 'near you'}</h2>
+        <p className="helper">{near.length} {near.length === 1 ? 'listing' : 'listings'} within about an hour's drive, closest first.</p>
       </div>
-      {local.length > shown.length && <Link to={browseHere} className="text-sm font-semibold text-brand-teal">See all {local.length}</Link>}
+      {near.length > shown.length && <Link to={browseHere} className="text-sm font-semibold text-brand-teal">See more</Link>}
     </div>
-
-    {times && <div className="mb-4 flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg bg-brand-surface px-4 py-3 text-sm ring-1 ring-brand-line">
-      <span className="font-semibold text-brand-ink">{times.cityLabel}</span>
-      {times.startsAt && <span className="inline-flex items-center gap-1.5 text-brand-body"><Flame size={14} className="text-brand-gold-ink" />Candle lighting <b className="text-brand-ink">{timeInZone(times.startsAt, times.tzid)}</b></span>}
-      {times.endsAt && <span className="inline-flex items-center gap-1.5 text-brand-body"><Moon size={14} className="text-brand-teal" />Havdalah <b className="text-brand-ink">{timeInZone(times.endsAt, times.tzid)}</b></span>}
-      {times.parsha && <span className="text-brand-muted">{times.parsha}</span>}
-    </div>}
-
-    {shown.length > 0
-      ? <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[repeat(2,minmax(0,1fr))]">{shown.map((p) => <ResourceCard key={p.id} provider={p} />)}</div>
-      : <div className="empty">
-        <MapPin />
-        <p>Nothing is listed for {where} yet. It is a curated directory, so a gap means nobody has added it — not that it does not exist.</p>
-        <div className="flex flex-wrap justify-center gap-2">
-          <Link to="/add" className="primary"><Plus size={16} />Add the first listing</Link>
-          <Link to="/feed" className="secondary"><MessageCircle size={16} />Ask the klal</Link>
-        </div>
-      </div>}
+    {timesBar}
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[repeat(2,minmax(0,1fr))]">{shown.map((p) => <ResourceCard key={p.id} provider={p} />)}</div>
   </section>;
 }

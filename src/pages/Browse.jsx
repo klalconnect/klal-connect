@@ -13,13 +13,8 @@ import { KITCHENS, kitchenMatches, kitchenOf } from '@/lib/kitchen';
 import { lookupPlaces } from '@/lib/placeLookup';
 import { providerPath } from '@/lib/paths';
 import { categoryLabel } from '@/lib/categories';
-
-const rad = (x) => x * Math.PI / 180;
-const miles = (a, b, c, d) => {
-  const x = rad(c - a), y = rad(d - b);
-  const q = Math.sin(x / 2) ** 2 + Math.cos(rad(a)) * Math.cos(rad(c)) * Math.sin(y / 2) ** 2;
-  return 3959 * 2 * Math.atan2(Math.sqrt(q), Math.sqrt(1 - q));
-};
+import { milesTo, useUserLocation } from '@/lib/userLocation';
+import CityInput from '@/components/CityInput';
 
 // A search id, so a contact action can be attributed to the search that led
 // to it — "did this search actually help anyone" is the only question worth
@@ -38,11 +33,24 @@ export default function Browse() {
   const [category, setCategory] = useState(params.get('category') || '');
   const [country, setCountry] = useState(params.get('country') || '');
   const [kitchen, setKitchen] = useState(params.get('kitchen') || '');
-  const lat = Number(params.get('lat')), lng = Number(params.get('lng'));
-  // "Nearest" needs a location to measure from. Without one every distance is
-  // unknown, so it left the list in no order at all while claiming one.
-  const located = Boolean(lat && lng);
-  const [sort, setSort] = useState(located ? 'nearest' : 'used');
+  // Closest first is the default whenever we know where the person is: the
+  // spot "Near me" sent, else their profile city, or the place a guest picked
+  // or their browser shared. A caterer search from Brooklyn should open on
+  // Brooklyn, not Minnesota. "Nearest" needs a location to measure from;
+  // without one every distance is unknown, so the list falls back to Most Used.
+  const me = useUserLocation();
+  const urlLat = Number(params.get('lat')), urlLng = Number(params.get('lng'));
+  const here = urlLat && urlLng ? { lat: urlLat, lng: urlLng } : me.lat != null ? { lat: me.lat, lng: me.lng } : null;
+  const located = Boolean(here);
+  // What they picked, if anything; until then the default follows the location,
+  // which for a member arrives a moment after the page opens.
+  const [picked, setSort] = useState('');
+  const sort = picked && (picked !== 'nearest' || located) ? picked : located ? 'nearest' : 'used';
+  const [settingCity, setSettingCity] = useState(false);
+  const [cityText, setCityText] = useState('');
+  const [locating, setLocating] = useState(false);
+  const [denied, setDenied] = useState(false);
+  const useMyLocation = async () => { setLocating(true); setDenied(!(await me.ask())); setLocating(false); };
   const [verified, setVerified] = useState(false);
   const [view, setView] = useState('list');
   const [showWide, setShowWide] = useState(false);
@@ -86,8 +94,14 @@ export default function Browse() {
   // With a search typed, the listings that are what was asked for come first
   // (a search for shul opens on the shuls), and the chosen sort orders each
   // tier. Without one, the sort alone decides.
+  //
+  // Closest first is gentler with the tiers: anything that is a real answer
+  // (at least half as strong a match as the best one) counts as one tier, so
+  // a Brooklyn caterer is not put behind a Minnesota one over a word in its
+  // name. Mentions in passing still come after.
   const order = (rows, scores = scoreOf) => {
-    const score = (p) => scores.get(p.id) || 0;
+    const best = Math.max(0, ...rows.map((p) => scores.get(p.id) || 0));
+    const score = sort === 'nearest' ? (p) => ((scores.get(p.id) || 0) >= best / 2 ? 1 : 0) : (p) => scores.get(p.id) || 0;
     return [...rows].sort((a, b) => (score(b) - score(a)) || (sort === 'nearest' ? (a.distance ?? 9999) - (b.distance ?? 9999)
       : sort === 'used' ? (b.usage_count || 0) - (a.usage_count || 0)
         : sort === 'saved' ? (b.save_count || 0) - (a.save_count || 0)
@@ -106,10 +120,14 @@ export default function Browse() {
   // are kept apart, in a folded box underneath, so the Bahamas shows the
   // Bahamas while someone in Boca can still find Relief Resources.
   const { results, wide, elsewhere, askedPlace } = useMemo(() => {
-    const withDistance = (p) => ({
-      ...p,
-      distance: lat && lng && p.latitude && p.longitude ? miles(lat, lng, p.latitude, p.longitude) : null,
-    });
+    // Most listings have no pin of their own and are placed at their city's
+    // centre: good enough to order by, but "0.0 mi" on a card would be a guess
+    // dressed as a fact, so only a pinned listing shows its miles.
+    const withDistance = (p) => {
+      const distance = milesTo(here, p);
+      const pinned = Number(p.latitude) && Number(p.longitude);
+      return { ...p, distance, shownDistance: pinned ? distance : null };
+    };
     const where = search.parsed.place;
     const hits = search.results.filter((r) => !r.wide).map((r) => r.provider).filter(passes);
     const anywhere = search.results.filter((r) => r.wide).map((r) => r.provider).filter(passes);
@@ -123,7 +141,7 @@ export default function Browse() {
       other = wide.map((r) => r.provider).filter((p) => passes(p) && !seen.has(p.id));
     }
     return { results: order(hits.map(withDistance)), wide: order(anywhere.map(withDistance)), elsewhere: order(other.map(withDistance), otherScores), askedPlace: where };
-  }, [search, category, sort, verified, lat, lng, country, kitchen]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [search, category, sort, verified, here?.lat, here?.lng, country, kitchen]); // eslint-disable-line react-hooks/exhaustive-deps
   // Where the results are, in words: "Boca Raton", "Israel", "Jerusalem, Israel".
   const whereText = [askedPlace, country].filter(Boolean).filter((s, i, all) => all.indexOf(s) === i).join(', ');
 
@@ -222,7 +240,7 @@ export default function Browse() {
         {categories.map((c) => <option key={c.id} value={c.name} disabled={countFor(c.name) === 0 && c.name !== category}>{categoryLabel(c.name)}</option>)}
       </select>
       <select className="field md:col-span-2" value={sort} onChange={(e) => setSort(e.target.value)} aria-label="Sort">
-        {located && <option value="nearest">Nearest</option>}
+        {located && <option value="nearest">Closest first</option>}
         <option value="used">Most Used</option>
         <option value="saved">Most Saved</option>
         <option value="recent">Recently Added</option>
@@ -238,6 +256,32 @@ export default function Browse() {
       {/* Last of the filters, and filled teal so it reads as the one action in a stack of boxes. */}
       <button type="button" onClick={clearFilters} className="clear-filters md:col-span-2"><X size={16} />Clear</button>
     </div>
+
+    {/* No location yet: ask for one rather than guess. Until then the list is
+        Most Used. Kept to one quiet line so it never pushes the results down. */}
+    {!located && providers.length > 0 && <div className="mb-4 rounded-lg bg-brand-surface px-3 py-2 text-sm ring-1 ring-brand-line">
+      {settingCity
+        ? <div className="flex flex-wrap items-center gap-2">
+          <span className="text-brand-body">Your city:</span>
+          <CityInput value={cityText} onChange={setCityText} autoFocus className="field mt-0 min-w-0 flex-1 py-1.5"
+            onPick={(p) => { me.choose(p); setSettingCity(false); setCityText(''); }} />
+          <button type="button" className="secondary py-1.5" onClick={() => setSettingCity(false)}>Cancel</button>
+        </div>
+        : <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-brand-body">
+          <MapPin size={15} className="shrink-0 text-brand-teal" />
+          <span>{denied ? 'Your browser did not share a location.' : 'See the closest results first:'}</span>
+          <button type="button" onClick={useMyLocation} disabled={locating} className="font-semibold text-brand-teal underline-offset-2 hover:underline">{locating ? 'Finding you…' : 'Use my location'}</button>
+          <span className="text-brand-muted">or</span>
+          <button type="button" onClick={() => setSettingCity(true)} className="font-semibold text-brand-teal underline-offset-2 hover:underline">pick your city</button>
+        </p>}
+    </div>}
+    {/* Says what "closest" is measured from, so the order explains itself. A
+        guest can change it; a member's comes from their profile city. */}
+    {sort === 'nearest' && !(urlLat && urlLng) && <p className="-mt-3 mb-4 flex flex-wrap items-center gap-x-2 px-1 text-xs text-brand-muted">
+      <MapPin size={13} className="shrink-0 text-brand-teal" />
+      <span>Closest to {me.city || 'your location'} first{me.source === 'profile' ? ' (your profile city)' : ''}.</span>
+      {me.source !== 'profile' && <button type="button" onClick={() => { me.forget(); setSettingCity(true); }} className="font-semibold text-brand-teal underline-offset-2 hover:underline">Change</button>}
+    </p>}
 
     <div className="mb-3 flex items-center justify-between">
       {/* When there is nothing local, say that — a bare "0 found" sitting
@@ -264,7 +308,7 @@ export default function Browse() {
       // grid-cols-[minmax(0,1fr)] is load-bearing on a phone, for the same
       // reason it is in Feed: a grid item's default min-width is auto, so the
       // column grew to fit the widest listing card and pushed the page sideways.
-      : <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[repeat(2,minmax(0,1fr))]">{results.map((p) => <ResourceCard key={p.id} provider={p} distance={p.distance} />)}</div>)}
+      : <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[repeat(2,minmax(0,1fr))]">{results.map((p) => <ResourceCard key={p.id} provider={p} distance={p.shownDistance} />)}</div>)}
 
     {/* Nothing matched. Say so plainly, then give three ways forward: where it
         does exist, asking the community, and adding it. */}
@@ -304,7 +348,7 @@ export default function Browse() {
       {elsewhere.length > 0 && <section>
         <h2 className="section-title mb-3">You might also look at…</h2>
         <p className="helper mb-3 mt-0">These match your search but are listed in another community.</p>
-        <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[repeat(2,minmax(0,1fr))]">{elsewhere.slice(0, 6).map((p) => <ResourceCard key={p.id} provider={p} distance={p.distance} />)}</div>
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[repeat(2,minmax(0,1fr))]">{elsewhere.slice(0, 6).map((p) => <ResourceCard key={p.id} provider={p} distance={p.shownDistance} />)}</div>
       </section>}
     </div>}
 
@@ -318,7 +362,7 @@ export default function Browse() {
         </span>
         <ChevronDown size={18} className={`shrink-0 text-brand-muted transition ${showWide ? 'rotate-180' : ''}`} />
       </button>
-      {showWide && <div className="grid grid-cols-[minmax(0,1fr)] gap-4 border-t border-brand-line p-4 lg:grid-cols-[repeat(2,minmax(0,1fr))]">{wide.map((p) => <ResourceCard key={p.id} provider={p} distance={p.distance} />)}</div>}
+      {showWide && <div className="grid grid-cols-[minmax(0,1fr)] gap-4 border-t border-brand-line p-4 lg:grid-cols-[repeat(2,minmax(0,1fr))]">{wide.map((p) => <ResourceCard key={p.id} provider={p} distance={p.shownDistance} />)}</div>}
     </section>}
 
     {providers.length === 0 && <div className="empty">
