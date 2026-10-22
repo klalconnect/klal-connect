@@ -12,7 +12,7 @@ import MinyanEditor from '@/components/MinyanEditor';
 import { isShulListing } from '@/lib/minyanim';
 import { COUNTRIES, countryName, countryOf, US } from '@/lib/countries';
 import { US_STATES } from '@/components/CityInput';
-const blank={name:'',tagline:'',category:'',subcategory:'',short_description:'',description:'',address:'',city:'',state:'',country:'',zip:'',phone:'',text_phone:'',email:'',website:'',hours:'',service_areas:'',languages:'English',delivery_mode:'in_person',whatsapp:'',payment_link_url:'',badges:[],gallery:[],minyanim:[],minyan_url:'',kitchen:''};
+const blank={name:'',tagline:'',category:'',subcategory:'',short_description:'',description:'',address:'',city:'',state:'',country:'',zip:'',phone:'',text_phone:'',email:'',website:'',hours:'',service_areas:'',languages:'English',delivery_mode:'in_person',whatsapp:'',payment_link_url:'',badges:[],gallery:[],minyanim:[],minyan_url:'',kitchen:'',not_jewish_owned:false};
 // initialCategory arrives from /add?category=… — an empty category tile on the
 // homepage asking for the first listing of that kind. initialName and
 // sourcePostId arrive from /add?from_post=… — an answer to an ask being turned
@@ -37,6 +37,7 @@ const fromProvider = (row) => ({
   badges: Array.isArray(row?.badges) ? row.badges : [],
   gallery: Array.isArray(row?.gallery) ? row.gallery : [],
   minyanim: Array.isArray(row?.minyanim) ? row.minyanim : [],
+  not_jewish_owned: row?.not_jewish_owned === true,
   // A listing from before countries were recorded shows the one its state
   // implies, and is saved with it on the next save.
   country: countryOf(row),
@@ -140,6 +141,7 @@ export default function ListingForm({initialCategory='',initialName='',sourcePos
         ? 'We have your request to manage it as the owner. Once the Klal team accepts it, you can edit the listing yourself.'
         : 'Need to change something later? Use "Suggest a Correction" on the listing page and the Klal team will update it.'}</span></>}</div>;return <form onSubmit={submit} className="space-y-5"><div className="form-grid"><Field label="Business or resource name" name="name" value={data.name} onChange={change} required/><label>Category<select className="field" name="category" value={data.category} onChange={change} required><option value="">Choose a category</option>{data.category&&categories.length>0&&!categories.some(c=>c.name===data.category)&&<option value={data.category}>{categoryLabel(data.category)}</option>}{categories.map(c=><option key={c.id} value={c.name}>{categoryLabel(c.name)}</option>)}</select></label><Field label="Subcategory" name="subcategory" value={data.subcategory} onChange={change} list="kc-subcategories" autoComplete="off" placeholder={data.category==='Other'?'Say what it is — this is what people will search for':(categories.find(c=>c.name===data.category)?.subcategories||[]).length?'Pick one or type your own':''}/><datalist id="kc-subcategories">{(categories.find(c=>c.name===data.category)?.subcategories||[]).map(s=><option key={s} value={s}/>)}</datalist><Field label="Short description" name="short_description" value={data.short_description} onChange={change} required/><label>City<CityInput value={data.city} onChange={v=>setData(d=>({...d,city:v}))} onPick={p=>setData(d=>({...d,city:p.city,state:stateForPlace(p,d.state),country:countryName(p.country_code)||d.country,latitude:p.latitude,longitude:p.longitude,country_code:p.country_code||d.country_code}))} required={!provider}/></label><label>State or region<StateSelect value={data.state} onChange={v=>setData(d=>({...d,state:v,country:US_STATES.some(([code])=>code===v)?US:d.country}))}/></label><label>Country<CountryField value={data.country} onChange={v=>setData(d=>({...d,country:v}))} required={!provider}/></label><Field label="ZIP code" name="zip" value={data.zip} onChange={change}/><Field label="Address (optional)" name="address" value={data.address} onChange={change}/><Field label="Phone" name="phone" value={data.phone} onChange={change}/><Field label="Text-enabled phone" name="text_phone" value={data.text_phone} onChange={change}/><Field label="WhatsApp number (with country code)" name="whatsapp" value={data.whatsapp} onChange={change} placeholder="1 732 555 0100"/><Field label="Payment link (optional)" name="payment_link_url" value={data.payment_link_url} onChange={change} placeholder="Stripe Payment Link, PayPal.me, Venmo…"/><Field label="Email" name="email" type="email" value={data.email} onChange={change}/><Field label="Website" name="website" value={data.website} onChange={change}/><Field label="Hours" name="hours" value={data.hours} onChange={change}/><Field label="Areas served (comma separated)" name="service_areas" value={data.service_areas} onChange={change}/><Field label="Languages (comma separated)" name="languages" value={data.languages} onChange={change}/><label>Service format<select className="field" name="delivery_mode" value={data.delivery_mode} onChange={change}><option value="in_person">In person</option><option value="remote">Remote</option><option value="both">Both</option></select></label></div><HeadlineEdit label="Tagline" value={data.tagline||''} onChange={v=>setData({...data,tagline:v})} helper="Appears under your listing name across the app."/>
 <ListingLocationPicker value={data} onChange={loc=>setData(d=>({...d,...loc}))}/>
+<OwnershipPicker value={data.not_jewish_owned} onChange={not_jewish_owned=>setData(d=>({...d,not_jewish_owned}))}/>
 {kitchenAppliesTo(data.category)&&<KitchenPicker value={data.kitchen} onChange={kitchen=>setData(d=>({...d,kitchen}))}/>}
 <BadgePicker category={data.category} value={data.badges} onChange={badges=>setData(d=>({...d,badges}))}/>
 {isShulListing(data)&&<MinyanEditor value={data.minyanim} onChange={m=>setData(d=>({...d,minyanim:typeof m==='function'?m(d.minyanim):m}))} link={data.minyan_url} onLink={v=>setData(d=>({...d,minyan_url:v}))}/>}
@@ -196,6 +198,17 @@ export function GalleryEditor({ value = [], ownerEdit = false, onChange, onUploa
     {value.length<GALLERY_MAX&&<label className="mt-3 block text-sm">Add a photo<input type="file" accept="image/*" onChange={add} disabled={uploading} className="field"/></label>}
     {uploading&&<p className="helper">Uploading…</p>}
     {err&&<p className="text-sm font-semibold text-brand-error">{err}</p>}
+  </fieldset>;
+}
+
+// Jewish owned or not. Jewish owned is the default and shows nothing; only
+// "Not Jewish owned" puts a pill on the listing.
+function OwnershipPicker({ value = false, onChange }){
+  const opt=(on,label,hint)=><label key={String(on)} className={`flex cursor-pointer items-start gap-2 rounded-lg border p-3 text-sm ${value===on?'border-brand-teal bg-brand-tint':'border-brand-line'}`}><input type="radio" name="not_jewish_owned" className="mt-1" checked={value===on} onChange={()=>onChange(on)}/><span><span className="font-medium text-brand-ink">{label}</span><span className="block text-xs text-brand-muted">{hint}</span></span></label>;
+  return <fieldset className="rounded-lg border border-brand-line p-4">
+    <legend className="px-1 text-sm font-semibold text-brand-ink">Ownership</legend>
+    <p className="helper mt-0">Is this business Jewish owned?</p>
+    <div className="mt-3 grid gap-2 sm:grid-cols-2">{opt(false,'Jewish owned','No label on the listing.')}{opt(true,'Not Jewish owned','Shows a "Not Jewish owned" label on the listing.')}</div>
   </fieldset>;
 }
 
