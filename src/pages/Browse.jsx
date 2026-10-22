@@ -13,6 +13,7 @@ import { KITCHENS, kitchenMatches, kitchenOf } from '@/lib/kitchen';
 import { lookupPlaces } from '@/lib/placeLookup';
 import { providerPath } from '@/lib/paths';
 import { categoryLabel } from '@/lib/categories';
+import { OWNERSHIP_FILTERS, ownershipMatches, ownershipRank, readOwnershipFilter, saveOwnershipFilter } from '@/lib/ownership';
 import { milesTo, useUserLocation } from '@/lib/userLocation';
 import CityInput from '@/components/CityInput';
 
@@ -52,8 +53,10 @@ export default function Browse() {
   const [denied, setDenied] = useState(false);
   const useMyLocation = async () => { setLocating(true); setDenied(!(await me.ask())); setLocating(false); };
   const [verified, setVerified] = useState(false);
-  // Hides listings marked Not Jewish owned. Off by default, so they show.
-  const [jewishOnly, setJewishOnly] = useState(false);
+  // All, Jewish-owned only or Not Jewish-owned only. Remembered in this
+  // browser, so a visitor who wants only one kind keeps getting it.
+  const [owned, setOwnedState] = useState(readOwnershipFilter);
+  const setOwned = (v) => { setOwnedState(v); saveOwnershipFilter(v); };
   const [view, setView] = useState('list');
   const [showWide, setShowWide] = useState(false);
 
@@ -91,7 +94,7 @@ export default function Browse() {
   // each choice would show for this search.
   const search = useMemo(() => searchDirectory(providers, { q, where: place, country }), [providers, q, place, country]);
   const scoreOf = useMemo(() => new Map(search.results.map((r) => [r.provider.id, r.score])), [search]);
-  const passes = (p) => (!verified || p.verified) && (!jewishOnly || !p.not_jewish_owned) && (!category || p.category === category) && kitchenMatches(p, kitchen);
+  const passes = (p) => (!verified || p.verified) && ownershipMatches(p, owned) && (!category || p.category === category) && kitchenMatches(p, kitchen);
 
   // With a search typed, the listings that are what was asked for come first
   // (a search for shul opens on the shuls), and the chosen sort orders each
@@ -101,10 +104,18 @@ export default function Browse() {
   // (at least half as strong a match as the best one) counts as one tier, so
   // a Brooklyn caterer is not put behind a Minnesota one over a word in its
   // name. Mentions in passing still come after.
+  //
+  // Among the real answers, Jewish-owned listings come first: in Closest
+  // first only against others about as close (the same ~3-mile band), in
+  // every other sort ahead of the rest of the tier.
   const order = (rows, scores = scoreOf) => {
     const best = Math.max(0, ...rows.map((p) => scores.get(p.id) || 0));
-    const score = sort === 'nearest' ? (p) => ((scores.get(p.id) || 0) >= best / 2 ? 1 : 0) : (p) => scores.get(p.id) || 0;
-    return [...rows].sort((a, b) => (score(b) - score(a)) || (sort === 'nearest' ? (a.distance ?? 9999) - (b.distance ?? 9999)
+    const tier = (p) => ((scores.get(p.id) || 0) >= best / 2 ? 1 : 0);
+    const score = sort === 'nearest' ? tier : (p) => scores.get(p.id) || 0;
+    const band = (p) => Math.floor((p.distance ?? 9999) / 3);
+    return [...rows].sort((a, b) => (tier(b) - tier(a))
+      || (sort === 'nearest' ? band(a) - band(b) : 0) || ownershipRank(a, b)
+      || (score(b) - score(a)) || (sort === 'nearest' ? (a.distance ?? 9999) - (b.distance ?? 9999)
       : sort === 'used' ? (b.usage_count || 0) - (a.usage_count || 0)
         : sort === 'saved' ? (b.save_count || 0) - (a.save_count || 0)
           : sort === 'recent' ? new Date(b.created_date) - new Date(a.created_date)
@@ -143,14 +154,14 @@ export default function Browse() {
       other = wide.map((r) => r.provider).filter((p) => passes(p) && !seen.has(p.id));
     }
     return { results: order(hits.map(withDistance)), wide: order(anywhere.map(withDistance)), elsewhere: order(other.map(withDistance), otherScores), askedPlace: where };
-  }, [search, category, sort, verified, jewishOnly, here?.lat, here?.lng, country, kitchen]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [search, category, sort, verified, owned, here?.lat, here?.lng, country, kitchen]); // eslint-disable-line react-hooks/exhaustive-deps
   // Where the results are, in words: "Boca Raton", "Israel", "Jerusalem, Israel".
   const whereText = [askedPlace, country].filter(Boolean).filter((s, i, all) => all.indexOf(s) === i).join(', ');
 
   // The category list shows no numbers, but a category with nothing in the
   // search on screen (say, shul in Boca Raton) is greyed out, judged by the
   // results, never the whole directory.
-  const scoped = useMemo(() => search.results.map((r) => r.provider).filter((p) => (!verified || p.verified) && (!jewishOnly || !p.not_jewish_owned)), [search, verified, jewishOnly]);
+  const scoped = useMemo(() => search.results.map((r) => r.provider).filter((p) => (!verified || p.verified) && ownershipMatches(p, owned)), [search, verified, owned]);
   const countFor = (name) => scoped.filter((p) => p.category === name).length;
   // The Meat / Dairy filter shows once food is in the picture: food chosen,
   // or a search that turned up places with a kitchen label.
@@ -161,7 +172,7 @@ export default function Browse() {
   // category, Verified only and the kitchen. Counted from the listings as
   // loaded, so a new listing is in them the next time the page opens.
   const countPlace = useMemo(() => placeCounter(providers, { q, country, keep: passes }),
-    [providers, q, country, category, verified, jewishOnly, kitchen]); // eslint-disable-line react-hooks/exhaustive-deps
+    [providers, q, country, category, verified, owned, kitchen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Suggestions under the keyword box count what is listed in the place being
   // searched, so they never promise results the page will not show.
@@ -172,7 +183,9 @@ export default function Browse() {
     else setQ(item.value);
   };
 
-  const isSearch = !!(q || place || category || verified || jewishOnly || country || kitchen);
+  // The ownership filter is left out: it is remembered, so counting it would
+  // log a search every time someone who set it opens the page.
+  const isSearch = !!(q || place || category || verified || country || kitchen);
 
   // Every search is recorded, not only the ones where someone clicks the
   // button — most arrive from a link with the query already in the URL. The
@@ -220,7 +233,7 @@ export default function Browse() {
   // comes with somewhere to look.
   const otherPlaces = [...new Set(elsewhere.map((p) => (p.city || '').trim()).filter(Boolean))].slice(0, 6);
 
-  const clearFilters = () => { setQ(''); choosePlace(''); setCountry(''); setCategory(''); setVerified(false); setJewishOnly(false); setKitchen(''); };
+  const clearFilters = () => { setQ(''); choosePlace(''); setCountry(''); setCategory(''); setVerified(false); setOwned(''); setKitchen(''); };
 
   return <div className="page-shell py-8">
     <div className="mb-7">
@@ -252,10 +265,12 @@ export default function Browse() {
         <option value="">Meat, dairy or fish: any</option>
         {KITCHENS.map((k) => <option key={k.id} value={k.id}>{k.label}</option>)}
       </select>}
-      <div className={`flex flex-wrap items-center gap-x-5 gap-y-2 px-2 text-sm ${showKitchen ? 'md:col-span-7' : 'md:col-span-10'}`}>
-        <label className="flex items-center gap-2"><input type="checkbox" checked={verified} onChange={(e) => setVerified(e.target.checked)} /> Verified only</label>
-        <label className="flex items-center gap-2"><input type="checkbox" checked={jewishOnly} onChange={(e) => setJewishOnly(e.target.checked)} /> Jewish owned only</label>
-      </div>
+      <select className="field md:col-span-3" value={owned} onChange={(e) => setOwned(e.target.value)} aria-label="Jewish-owned or not">
+        {OWNERSHIP_FILTERS.map((f) => <option key={f.id || 'all'} value={f.id}>{f.id ? f.label : 'Jewish-owned or not: All'}</option>)}
+      </select>
+      <label className={`flex items-center gap-2 px-2 text-sm ${showKitchen ? 'md:col-span-4' : 'md:col-span-7'}`}>
+        <input type="checkbox" checked={verified} onChange={(e) => setVerified(e.target.checked)} /> Verified only
+      </label>
       {/* Last of the filters, and filled teal so it reads as the one action in a stack of boxes. */}
       <button type="button" onClick={clearFilters} className="clear-filters md:col-span-2"><X size={16} />Clear</button>
     </div>
@@ -341,7 +356,7 @@ export default function Browse() {
             <div className="mt-5 flex flex-wrap gap-2">
               <Link to={askHref} className="primary"><MessageCircle size={16} />Ask the community</Link>
               <Link to="/add" className="secondary"><Plus size={16} />Suggest a listing</Link>
-              {isSearch && <button type="button" onClick={clearFilters} className="secondary">Clear filters</button>}
+              {(isSearch || owned) && <button type="button" onClick={clearFilters} className="secondary">Clear filters</button>}
             </div>
           </div>
         </div>

@@ -13,6 +13,7 @@
 import CITY_COORDS from '../data/cityCoords.js';
 import { countryOf, countryName, US } from './countries.js';
 import { stateName } from './place.js';
+import { ownershipRank } from './ownership.js';
 
 // About an hour's drive: Lakewood and Monsey are near Brooklyn, Miami is near
 // Boca Raton, Philadelphia is not near New York.
@@ -85,8 +86,8 @@ function milesBetween(lat1, lng1, lat2, lng2) {
 
 /**
  * The listings within NEAR_MILES of `origin`, nearest first. Listings in the
- * same town come before the next town over; within a town, `rank` (most used,
- * newest...) decides. Empty when `origin` is unknown or nothing is that close.
+ * same town come before the next town over; within a town, Jewish-owned ones
+ * come first and then `rank` (most used, newest...) decides. Empty when `origin` is unknown or nothing is that close.
  */
 export function nearbyListings(providers, origin, { rank = null, maxMiles = NEAR_MILES } = {}) {
   if (!origin) return [];
@@ -101,6 +102,6 @@ export function nearbyListings(providers, origin, { rank = null, maxMiles = NEAR
   // section's own order applies inside it.
   const band = (m) => Math.floor(m / 3);
   return found
-    .sort((a, b) => band(a.miles) - band(b.miles) || (rank ? rank(a.p, b.p) : 0) || a.miles - b.miles)
+    .sort((a, b) => band(a.miles) - band(b.miles) || ownershipRank(a.p, b.p) || (rank ? rank(a.p, b.p) : 0) || a.miles - b.miles)
     .map(({ p }) => p);
 }

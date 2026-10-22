@@ -5,6 +5,7 @@ import { ArrowLeft, SlidersHorizontal } from 'lucide-react';
 import { api } from '@/api/client';
 import { slugify } from '@/lib/paths';
 import ResourceCard from '@/components/ResourceCard';
+import { jewishOwnedFirst } from '@/lib/ownership';
 import { useMetaTags } from '@/hooks/useMetaTags';
 import { categoryLabel } from '@/lib/categories';
 
@@ -31,9 +32,9 @@ export default function DirectoryCategory() {
   // dashes back into spaces can never restore the comma — so un-slugging and
   // matching on text meant the sitemap advertised URLs that matched nothing.
   const rows = match
-    ? providers.filter((p) => (p.status === 'published' || p.status === undefined)
+    ? jewishOwnedFirst(providers.filter((p) => (p.status === 'published' || p.status === undefined)
         && (p.category || '').toLowerCase() === match.name.toLowerCase()
-        && (!city || slugify(p.city || '') === city))
+        && (!city || slugify(p.city || '') === city)))
     : [];
 
   useMetaTags(match ? {
