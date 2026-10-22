@@ -3,7 +3,7 @@
 // this knows everywhere else, so a member in Deerfield Beach or Boise can pick
 // their town with no geocoder key, no quota and no request leaving the server.
 //
-// The table (server/data/worldCities.js, ~5 MB) is only loaded on the first
+// The table (server/geo/worldCities.js, ~5 MB) is only loaded on the first
 // lookup, so requests that never ask for a place do not pay for parsing it.
 // Rebuild it with scripts/build-world-cities.mjs.
 import { distanceKm } from './places.js';
@@ -32,7 +32,7 @@ let byStart = null;
 
 async function load() {
   if (towns) return;
-  const { default: text } = await import('./data/worldCities.js');
+  const { default: text } = await import('./geo/worldCities.js');
   towns = [];
   byStart = new Map();
   for (const line of text.split('\n')) {
