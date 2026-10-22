@@ -8,12 +8,12 @@ import { countriesFrom } from '@/lib/countries';
 // just "United States", not "United States (7524)". A select shows its chosen
 // option's own text, so the name alone is drawn over that text, on the box's
 // own background, leaving the arrow; the list that opens still has every count.
-// Big numbers are rounded down to the 500 below and given a plus, so they read
-// at a glance and never overstate: 7524 is "7.5k+", 1433 "1k+", 432 stays 432.
+// Big numbers are rounded down to the hundred below and given a plus, so they
+// read at a glance and never overstate: 7524 is "7.5k+", 1433 "1.4k+", 432
+// stays 432.
 export function shortCount(n) {
   if (n < 1000) return String(n);
-  const k = Math.floor(n / 500) / 2;
-  return `${k}k+`;
+  return `${Math.floor(n / 100) / 10}k+`;
 }
 
 export default function CountrySelect({ providers = [], value = '', onChange, className = 'field', wrapperClassName = '', labelClassName = 'left-0 right-4', ...rest }) {
