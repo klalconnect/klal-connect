@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '@/api/client';
-import { List, Map as MapIcon, SlidersHorizontal, MessageCircle, Plus, MapPin, Globe, ChevronDown } from 'lucide-react';
+import { List, Map as MapIcon, SlidersHorizontal, MessageCircle, Plus, MapPin, Globe, ChevronDown, X } from 'lucide-react';
 import ResourceCard from '@/components/ResourceCard';
 import DirectoryMap from '@/components/DirectoryMap';
 import { placeCounter, searchDirectory, suggestKeywords, suggestPlaces } from '@/lib/search';
@@ -228,7 +228,7 @@ export default function Browse() {
     </div>
 
     <div className="mb-6 grid gap-2 rounded-lg bg-brand-surface p-3 ring-1 ring-brand-line md:grid-cols-12">
-      <SuggestInput wrapperClassName="md:col-span-3" value={q} onChange={setQ} onPick={pickKeyword}
+      <SuggestInput wrapperClassName="md:col-span-4" value={q} onChange={setQ} onPick={pickKeyword}
         suggest={(text) => suggestKeywords(text, providers, categories, place, country)}
         placeholder="Plumber, therapist, gemach…" aria-label="What are you looking for?" />
       <SuggestInput wrapperClassName="md:col-span-2" value={place} onChange={choosePlace} onPick={(item) => choosePlace(item.value)}
@@ -246,14 +246,15 @@ export default function Browse() {
         <option value="recent">Recently Added</option>
         <option value="alpha">Alphabetical</option>
       </select>
-      <button onClick={clearFilters} className="secondary md:col-span-1">Clear</button>
       {showKitchen && <select className="field md:col-span-3" value={kitchen} onChange={(e) => setKitchen(e.target.value)} aria-label="Meat, dairy or fish">
         <option value="">Meat, dairy or fish: any</option>
         {KITCHENS.map((k) => <option key={k.id} value={k.id}>{k.label}</option>)}
       </select>}
-      <label className={`flex items-center gap-2 px-2 text-sm ${showKitchen ? 'md:col-span-9' : 'md:col-span-12'}`}>
+      <label className={`flex items-center gap-2 px-2 text-sm ${showKitchen ? 'md:col-span-7' : 'md:col-span-10'}`}>
         <input type="checkbox" checked={verified} onChange={(e) => setVerified(e.target.checked)} /> Verified only
       </label>
+      {/* Last of the filters, and filled teal so it reads as the one action in a stack of boxes. */}
+      <button type="button" onClick={clearFilters} className="clear-filters md:col-span-2"><X size={16} />Clear</button>
     </div>
 
     {/* No location yet: ask for one rather than guess. Until then the list is
