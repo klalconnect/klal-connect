@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/api/client';
-import { placeMatcher } from './place.js';
+import { listingPoint, placePoint } from './nearby.js';
 
 // Where the person using the site is, for "closest first" and "near you".
 //
@@ -13,8 +13,8 @@ import { placeMatcher } from './place.js';
 //   3. nothing: callers fall back to their usual order and may offer `ask`
 //
 // A member's profile city without coordinates yet (the lookup runs in the
-// background) is placed at the middle of the listings filed in that city,
-// which is near enough to tell Brooklyn from Minnesota.
+// background) is placed at the centre of that city (see @/lib/nearby), which
+// is near enough to tell Brooklyn from Minnesota.
 
 const KEY = 'kc_my_location';
 
@@ -29,21 +29,13 @@ export function milesBetween(lat1, lng1, lat2, lng2) {
 const hasPoint = (p) => p && p.latitude != null && p.longitude != null && p.latitude !== '' && p.longitude !== ''
   && Number.isFinite(Number(p.latitude)) && Number.isFinite(Number(p.longitude));
 
-/** How far a listing is from a location, in miles, or null when either has no pin. */
+/**
+ * How far a listing is from a location, in miles, or null when either cannot
+ * be placed. A listing without its own pin is measured from its city's centre.
+ */
 export function milesTo(here, provider) {
-  if (!here || !hasPoint(provider)) return null;
-  return milesBetween(here.lat, here.lng, Number(provider.latitude), Number(provider.longitude));
-}
-
-/** The middle of the listings pinned in a place ("Brooklyn"), or null. */
-export function pointOfPlace(place, providers) {
-  const test = placeMatcher(place, providers, { everywhere: false });
-  if (!test) return null;
-  const pins = providers.filter((p) => hasPoint(p) && test(p));
-  if (!pins.length) return null;
-  const lat = pins.reduce((s, p) => s + Number(p.latitude), 0) / pins.length;
-  const lng = pins.reduce((s, p) => s + Number(p.longitude), 0) / pins.length;
-  return { lat, lng };
+  const at = here && listingPoint(provider);
+  return at ? milesBetween(here.lat, here.lng, at.lat, at.lng) : null;
 }
 
 function readSaved() {
@@ -63,13 +55,12 @@ function save(value) {
 
 /**
  * The person's location: { lat, lng, city, source } with source 'profile',
- * 'browser' or 'chosen', or null fields while none is known. `providers`
- * lets a member's city stand in while their coordinates are still missing.
+ * 'browser' or 'chosen', or null fields while none is known.
  *
  * `ask()` asks the browser (resolving true or false), `choose(place)` keeps a
  * picked place ({ latitude, longitude, city }), and `forget()` drops either.
  */
-export function useUserLocation(providers = []) {
+export function useUserLocation() {
   const { data: me = null } = useQuery({
     queryKey: ['me', 'home'],
     queryFn: async () => (await api.auth.hasAccount() ? api.auth.me() : null),
@@ -106,7 +97,7 @@ export function useUserLocation(providers = []) {
   if (hasPoint(me)) here = { lat: Number(me.latitude), lng: Number(me.longitude), city: profileCity, source: 'profile' };
   else if (saved) here = saved;
   else if (profileCity) {
-    const point = pointOfPlace(profileCity, providers);
+    const point = placePoint({ city: profileCity, country: me?.country_code });
     if (point) here = { ...point, city: profileCity, source: 'profile' };
   }
   return { lat: here?.lat ?? null, lng: here?.lng ?? null, city: here?.city || '', source: here?.source || null, ask, choose, forget };
