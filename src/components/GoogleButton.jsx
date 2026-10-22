@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { api } from '@/api/client';
+import { friendlyAuthError } from '@/lib/authErrors';
 
 // "Continue with Google" through Google Identity Services. Renders nothing at
 // all unless the server has a client id (GOOGLE_CLIENT_ID), so there is never
@@ -7,6 +8,8 @@ import { api } from '@/api/client';
 // creates or signs in the account — no password, no verification code,
 // because Google already verified the address.
 const GSI_SRC = 'https://accounts.google.com/gsi/client';
+const GOOGLE_FAILED = 'Google sign-in did not work. Please try again, or use your email below.';
+const GOOGLE_UNAVAILABLE = 'Google sign-in is not available right now. You can use your email below.';
 let gsiLoading = null;
 function loadGsi() {
   if (window.google?.accounts?.id) return Promise.resolve();
@@ -36,13 +39,13 @@ export default function GoogleButton({ onSignedIn, onError, text = 'continue_wit
         client_id: clientId,
         callback: async ({ credential }) => {
           try { onSignedIn(await api.auth.loginWithGoogle(credential)); }
-          catch (err) { onError?.(err.message || 'Google sign-in failed.'); }
+          catch (err) { onError?.(friendlyAuthError(err, GOOGLE_FAILED)); }
         },
         ux_mode: 'popup',
         itp_support: true,
       });
       window.google.accounts.id.renderButton(box.current, { theme: 'outline', size: 'large', shape: 'pill', text, width: 340, logo_alignment: 'left' });
-    }).catch((err) => onError?.(err.message));
+    }).catch((err) => { console.warn('[auth] Google button did not load', err); onError?.(GOOGLE_UNAVAILABLE); });
     return () => { cancelled = true; };
   }, [clientId, onSignedIn, onError, text]);
 

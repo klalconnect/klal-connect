@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LogIn, Mail, Loader2 } from "lucide-react";
 import AuthLayout from "@/components/AuthLayout";
+import { friendlyAuthError } from "@/lib/authErrors";
 import PasswordInput from "@/components/PasswordInput";
 import VerifyEmail from "@/components/VerifyEmail";
 import GoogleButton from "@/components/GoogleButton";
@@ -49,7 +50,7 @@ export default function Login() {
           return;
         } catch { /* fall through to the message below */ }
       }
-      setError(err.message || "Invalid email or password");
+      setError(friendlyAuthError(err, err?.status === 401 ? "Invalid email or password" : undefined));
     } finally {
       setLoading(false);
     }

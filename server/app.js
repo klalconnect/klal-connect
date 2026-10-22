@@ -11,8 +11,9 @@ import { randomBytes } from 'node:crypto';
 import { store, users, userToPublic, otp, geoCache, GUEST_EMAIL } from './db.js';
 import {
   attachUser, requireAuth, requireAdmin,
-  hashPassword, checkPassword, signToken, deliverCode, canDeliverCodes,
+  hashPassword, checkPassword, signToken, deliverCode, canDeliverCodes, sendsRealMail, ADDRESS_REJECTED,
 } from './auth.js';
+import { isUndeliverableEmail } from '../src/lib/emailCheck.js';
 import { functions, publicFunctions, safeExternalUrl, findInviteByCode } from './functions.js';
 import { ADMIN_ONLY_LISTING_FIELDS } from '../src/lib/trust.js';
 import { BADGE_BY_ID, badgeAppliesTo } from '../src/lib/badges.js';
@@ -999,6 +1000,7 @@ app.post('/api/auth/register', async (req, res, next) => {
   const email = normalizeEmail(req.body?.email);
   if (!email || !password) return res.status(400).json({ error: 'Email and password are required' });
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return res.status(400).json({ error: 'That does not look like an email address' });
+  if (sendsRealMail() && isUndeliverableEmail(email)) return res.status(422).json({ error: ADDRESS_REJECTED });
   if (String(password).length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
   if (await users.byEmail(email)) return res.status(409).json({ error: 'That email is already registered' });
 
@@ -1020,10 +1022,14 @@ app.post('/api/auth/register', async (req, res, next) => {
     return res.status(201).json({ ok: true, otp_sent: false, access_token: signToken(row), user: sessionUser(userToPublic(row)) });
   }
 
+  // The code goes out before the account exists: an address the mail
+  // service refuses then leaves nothing behind, and the person can fix the
+  // typo and try again instead of hitting "already registered".
+  const code = await otp.issue(String(email).trim(), 'verify');
+  const devCode = await deliverCode(email, 'verify', code);
   const row = await users.create({ email, password_hash: hashPassword(password), role, verified: 0, full_name: full_name || '', ...invitedBy });
   await acceptInvite(invited, row);
-  const code = await otp.issue(String(email).trim(), 'verify');
-  res.status(201).json(withDevCode({ ok: true, otp_sent: true }, await deliverCode(email, 'verify', code)));
+  res.status(201).json(withDevCode({ ok: true, otp_sent: true }, devCode));
 });
 
 // Marks an invite as joined and tells the inviter. Invite rows are reusable
@@ -1243,7 +1249,9 @@ app.use('/api', (req, res) => res.status(404).json({ error: `No such endpoint: $
 // so nothing above is shadowed.
 mountSeo(app, SHELL);
 
-app.use((err, _req, res, _next) => {
+const SOMETHING_WENT_WRONG = 'Something went wrong on our side. Please try again in a few minutes.';
+
+app.use((err, req, res, _next) => {
   if (err?.code === 'LIMIT_FILE_SIZE') {
     return res.status(413).json({ error: `That image is too large. Please choose one under ${MAX_UPLOAD_MB}MB.` });
   }
@@ -1252,7 +1260,11 @@ app.use((err, _req, res, _next) => {
   const status = err.statusCode || 500;
   if (status >= 500) console.error('[api]', err);
   else console.warn(`[api] ${status} ${err.message}`);
-  res.status(status).json({ error: err.message || 'Server error' });
+  // Sign-up, sign-in and reset are where a new visitor decides whether the
+  // site works. An unexpected failure there gets a sentence, never the raw
+  // error; errors given a status on purpose were written for people.
+  const unexpected = !err.statusCode && req.originalUrl.startsWith('/api/auth');
+  res.status(status).json({ error: unexpected ? SOMETHING_WENT_WRONG : (err.message || 'Server error') });
 });
 
 export default app;

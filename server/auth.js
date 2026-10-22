@@ -77,6 +77,7 @@ if (process.env.KC_EMAIL_DELIVERY === 'real' && !mailConfigured()) {
 // Whether a verification or reset code can actually reach the person: either a
 // real mail provider, or the local dev mode that hands the code back.
 export const canDeliverCodes = () => REAL_MAIL || DEV_CODES;
+export const sendsRealMail = () => REAL_MAIL;
 
 // Sends the code by email when a provider is configured. In local dev the
 // code is returned to the caller instead; in production without a provider
@@ -87,12 +88,28 @@ export async function deliverCode(email, purpose, code) {
     return code;
   }
   if (REAL_MAIL) {
-    await sendMail({ to: String(email).trim(), ...codeEmail(purpose, code) });
+    try {
+      await sendMail({ to: String(email).trim(), ...codeEmail(purpose, code) });
+    } catch (err) {
+      // Details stay in the server log; the person gets a sentence.
+      console.error(`[auth] ${purpose} code to ${email} not sent:`, err.message);
+      throw mailFailure(err);
+    }
     console.log(`[auth] ${purpose} code emailed to ${email}`);
     return undefined;
   }
   console.log(`[auth] ${purpose} code for ${email}: (withheld — no mail provider)`);
   return undefined;
+}
+
+export const ADDRESS_REJECTED = "We couldn't send a verification email to that address. Please check it and try again.";
+export const MAIL_UNAVAILABLE = "We couldn't send the email just now. Please try again in a few minutes.";
+
+function mailFailure(cause) {
+  const e = new Error(cause?.addressRejected ? ADDRESS_REJECTED : MAIL_UNAVAILABLE);
+  e.statusCode = cause?.addressRejected ? 422 : 503;
+  e.mailFailed = true;
+  return e;
 }
 
 export { otp };

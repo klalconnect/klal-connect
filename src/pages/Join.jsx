@@ -4,6 +4,7 @@ import { UserPlus, LogIn, Compass } from 'lucide-react';
 import { api } from '@/api/client';
 import useVouchesEnabled from '@/hooks/useVouchesEnabled';
 import AuthLayout from '@/components/AuthLayout';
+import { friendlyAuthError } from '@/lib/authErrors';
 
 // Where an invite link lands. Remembers the code so the account created next
 // is credited to the inviter, and says who invited you before asking for
@@ -22,7 +23,7 @@ export default function Join() {
         const member = await api.auth.hasAccount().catch(() => false);
         if (alive) setState({ loading: false, invite, member });
       } catch (err) {
-        if (alive) setState({ loading: false, error: err.message || 'That invite link is not valid.' });
+        if (alive) setState({ loading: false, error: friendlyAuthError(err, 'That invite link is not valid.') });
       }
     })();
     return () => { alive = false; };
