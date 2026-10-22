@@ -94,17 +94,23 @@ await sleep(400);
 const quick = await ev(`[...document.querySelectorAll('a[href*="/browse?q="]')].map(a=>a.textContent.trim())`);
 ok(Array.isArray(quick) && quick.length >= 6, 'quick links are present', `${quick?.length} links`);
 
-// --- category tiles carry real counts or ask for the first listing ------
+// Home shows no listing counts: each one measured something slightly
+// different and they disagreed with each other and with the results a tap
+// opened. The numbers that stay are on the results page itself.
+ok(!/\d+ listed/.test(await ev(`document.body.innerText`)), 'no "N listed" counts on Home');
+ok(!(quick || []).some((t) => /\d/.test(t)), 'quick links carry no counts', JSON.stringify(quick));
+
+// --- category tiles, with an invitation where a category is empty -------
 const tiles = await ev(`[...document.querySelectorAll('a[href*="/browse?category="], a[href*="/add?category="]')].map(a=>a.textContent.trim())`);
 const addFirst = (tiles || []).filter((t) => /Add the first/.test(t)).length;
-const listed = (tiles || []).filter((t) => /\d+ listed/.test(t)).length;
-console.log(`  info  ${tiles?.length || 0} category tiles — ${listed} with counts, ${addFirst} inviting the first listing`);
+console.log(`  info  ${tiles?.length || 0} category tiles — ${addFirst} inviting the first listing`);
 ok((tiles?.length || 0) > 0, 'category tiles rendered');
 ok(!(tiles || []).some((t) => /Coming soon/.test(t)), 'no tile promises "coming soon"');
 
 // --- a community can be chosen, and it sticks ---------------------------
 const chips = await ev(`(()=>{const l=[...document.querySelectorAll('span')].find(s=>s.textContent.trim()==='Community');return l?[...l.parentElement.querySelectorAll('button')].map(b=>b.textContent.trim()):[]})()`);
 ok(Array.isArray(chips) && chips.length > 0, 'community chips are present', JSON.stringify(chips));
+ok(!(chips || []).some((t) => /\d/.test(t)), 'community chips carry no counts', JSON.stringify(chips));
 
 // Named explicitly, not left to "no page errors" to catch as a React warning:
 // the launch community and the chosen community were deduped against the listed
