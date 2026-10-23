@@ -15,7 +15,13 @@
 import { createHash, createHmac } from 'node:crypto';
 import { newId } from './db.js';
 
-const ACCOUNT_ID = process.env.R2_ACCOUNT_ID || '';
+// The Account ID is not a secret (it is in every dashboard address), so the
+// site's own one is written here too. The setting wins when it holds an ID —
+// pasted on its own or inside the full storage address — and the built-in
+// one covers a setting that was pasted wrong, which is otherwise only
+// fixable by someone signed in to the hosting account.
+const KLAL_R2_ACCOUNT_ID = '4c7c4ff9d289ccc74e15cb3910647df7';
+const ACCOUNT_ID = /[0-9a-f]{32}/i.exec(process.env.R2_ACCOUNT_ID || '')?.[0].toLowerCase() || KLAL_R2_ACCOUNT_ID;
 const ACCESS_KEY = process.env.R2_ACCESS_KEY_ID || '';
 // Like the database password, this never leaves the server.
 const SECRET_KEY = process.env.R2_SECRET_ACCESS_KEY || '';
@@ -156,7 +162,7 @@ async function tryOnce(method, url, init) {
  */
 export async function checkVideoStorage() {
   const setup = {
-    account_id: /^[0-9a-f]{32}$/.test(ACCOUNT_ID) ? 'looks right' : ACCOUNT_ID ? 'does not look like a Cloudflare Account ID (32 letters and numbers)' : 'missing',
+    account_id: /[0-9a-f]{32}/i.test(process.env.R2_ACCOUNT_ID || '') ? 'looks right' : 'the Vercel setting does not hold an Account ID, so the built-in one is used',
     access_key_id: ACCESS_KEY ? (ACCESS_KEY.length === 32 ? 'looks right' : `is ${ACCESS_KEY.length} characters; Cloudflare's are 32`) : 'missing',
     secret_access_key: SECRET_KEY ? (SECRET_KEY.length === 64 ? 'looks right' : `is ${SECRET_KEY.length} characters; Cloudflare's are 64`) : 'missing',
     bucket: BUCKET,
