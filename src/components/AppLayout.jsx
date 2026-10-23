@@ -1,5 +1,5 @@
 import React, { Suspense } from 'react';
-import { Outlet, NavLink } from 'react-router-dom';
+import { Outlet, NavLink, Link, useLocation } from 'react-router-dom';
 import { Home as HomeIcon, Bookmark, UserRound, ShieldCheck, Newspaper, LayoutGrid, Users, LogOut, Settings, MessageSquare } from 'lucide-react';
 import Brand from '@/components/Brand';
 import ThemeToggle from '@/components/ThemeToggle';
@@ -13,6 +13,7 @@ import BackToTop from '@/components/BackToTop';
 import SiteFooter from '@/components/SiteFooter';
 import { accountLinks } from '@/components/GuestPrompt';
 import { useAuth } from '@/lib/AuthContext';
+import { tabFor } from '@/lib/navTab';
 
 const Home = HomeIcon;
 // Jobs is deliberately absent until real jobs exist: a nav item that always
@@ -81,6 +82,9 @@ function SettingsGear() {
 
 export default function AppLayout() {
   useDetectLocation();
+  const { pathname } = useLocation();
+  const { user } = useAuth();
+  const tab = tabFor(pathname, user?.id);
   // pb clears the phone's bottom bar, which is taller than 5rem once the home
   // indicator's inset is added — content was sitting behind it on a notched
   // iPhone.
@@ -89,7 +93,7 @@ export default function AppLayout() {
     {/* The header carries the status-bar inset itself, so these two banners sit
         below it rather than above: installed to the home screen, anything at the
         very top of the document is behind the Dynamic Island. */}
-    <header className="sticky top-0 z-40 border-b border-brand-line bg-brand-canvas/95 pt-[env(safe-area-inset-top)] backdrop-blur"><div className="mx-auto flex h-16 max-w-7xl items-center justify-between pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]"><Brand/><div className="flex items-center gap-1"><nav className="hidden items-center gap-1 md:flex">{links.map(([n,p])=><NavLink key={n} to={p} className={({isActive})=>`rounded-full px-4 py-2 text-sm font-medium ${isActive?'bg-brand-navy text-white':'text-brand-ink hover:bg-brand-surface'}`}>{n}</NavLink>)}</nav><HeaderAccount/><StaffLink/><HeaderBell/><SettingsGear/><ThemeToggle/></div></div></header>
+    <header className="sticky top-0 z-40 border-b border-brand-line bg-brand-canvas/95 pt-[env(safe-area-inset-top)] backdrop-blur"><div className="mx-auto flex h-16 max-w-7xl items-center justify-between pl-[max(1rem,env(safe-area-inset-left))] pr-[max(1rem,env(safe-area-inset-right))]"><Brand/><div className="flex items-center gap-1"><nav className="hidden items-center gap-1 md:flex">{links.map(([n,p])=><Link key={n} to={p} aria-current={tab===n?'page':undefined} className={`rounded-full px-4 py-2 text-sm ${tab===n?'bg-brand-teal/15 font-semibold text-brand-teal ring-1 ring-brand-teal/40':'font-medium text-brand-ink hover:bg-brand-surface'}`}>{n}</Link>)}</nav><HeaderAccount/><StaffLink/><HeaderBell/><SettingsGear/><ThemeToggle/></div></div></header>
     <ShabbosMode/>
     <TravelWarningBanner/>
     {/* A page that throws should not take the header and the tab bar with it:
@@ -105,6 +109,6 @@ export default function AppLayout() {
         each column refused to go narrower than its own label — "Resources"
         wants about 58px, six of those is 348px, and the bar ran off a 320px
         screen. The labels truncate instead of setting the width. */}
-    <nav className="fixed inset-x-0 bottom-0 z-50 grid grid-cols-[repeat(6,minmax(0,1fr))] border-t border-brand-line bg-brand-surface pl-[max(.5rem,env(safe-area-inset-left))] pr-[max(.5rem,env(safe-area-inset-right))] pb-[max(.4rem,env(safe-area-inset-bottom))] pt-2 md:hidden">{mobileLinks.map(([n,p,I])=><NavLink key={n} to={p} end={p==='/'||p==='/feed'} className={({isActive})=>`flex min-w-0 flex-col items-center gap-1 text-[11px] ${isActive?'text-brand-teal':'text-brand-muted'}`}><I size={20} className="shrink-0"/><span className="max-w-full truncate">{n}</span></NavLink>)}</nav>
+    <nav className="fixed inset-x-0 bottom-0 z-50 grid grid-cols-[repeat(6,minmax(0,1fr))] border-t border-brand-line bg-brand-surface pl-[max(.5rem,env(safe-area-inset-left))] pr-[max(.5rem,env(safe-area-inset-right))] pb-[max(.4rem,env(safe-area-inset-bottom))] pt-2 md:hidden">{mobileLinks.map(([n,p,I])=><Link key={n} to={p} aria-current={tab===n?'page':undefined} className={`relative flex min-w-0 flex-col items-center gap-0.5 text-[11px] ${tab===n?'font-bold text-brand-teal':'text-brand-muted'}`}>{tab===n&&<span aria-hidden="true" className="absolute -top-2 h-[3px] w-8 rounded-full bg-brand-teal"/>}<span className={`grid h-7 w-12 place-items-center rounded-full ${tab===n?'bg-brand-teal/15':''}`}><I size={20} className="shrink-0"/></span><span className="max-w-full truncate">{n}</span></Link>)}</nav>
   </div>;
 }
