@@ -123,3 +123,77 @@ export async function deleteVideo(url) {
     console.warn('[video] could not delete', key, err?.message);
   }
 }
+
+// Cloudflare's reasons, in words an admin can act on. Whatever is not here is
+// shown as Cloudflare's own code.
+const R2_REASONS = {
+  InvalidAccessKeyId: 'Cloudflare does not recognise the Access Key ID. Copy it again into R2_ACCESS_KEY_ID in Vercel.',
+  SignatureDoesNotMatch: 'The Secret Access Key does not match the Access Key ID. Copy both again into Vercel (R2_SECRET_ACCESS_KEY and R2_ACCESS_KEY_ID).',
+  NoSuchBucket: 'There is no bucket with that name. R2_BUCKET in Vercel should be klal-media.',
+  AccessDenied: 'The key is not allowed to write to the bucket. Its permission should be Object Read & Write, for klal-media.',
+  // R2 answers this both for a key copied wrong and for one without write
+  // permission, so the advice covers both.
+  Unauthorized: 'Cloudflare did not accept the key. Either the Access Key ID or Secret Access Key was copied wrong into Vercel, or the key is not allowed to write to klal-media (it should be Object Read & Write).',
+};
+
+async function tryOnce(method, url, init) {
+  try {
+    const res = await fetch(url, { method, ...init });
+    const text = await res.text().catch(() => '');
+    const code = /<Code>([^<]+)<\/Code>/.exec(text)?.[1] || '';
+    return { status: res.status, code };
+  } catch (err) {
+    return { status: 0, code: err?.cause?.code || err?.message || 'network' };
+  }
+}
+
+/**
+ * The admin's "Test video storage" button: a tiny upload done exactly the way
+ * a phone does it, then a read through the public address, then a clean-up.
+ * A browser is never told why storage refused an upload — Cloudflare's error
+ * replies carry no permission for the page to read them — so this is the
+ * only place the reason can be seen. Nothing secret is returned.
+ */
+export async function checkVideoStorage() {
+  const setup = {
+    account_id: /^[0-9a-f]{32}$/.test(ACCOUNT_ID) ? 'looks right' : ACCOUNT_ID ? 'does not look like a Cloudflare Account ID (32 letters and numbers)' : 'missing',
+    access_key_id: ACCESS_KEY ? (ACCESS_KEY.length === 32 ? 'looks right' : `is ${ACCESS_KEY.length} characters; Cloudflare's are 32`) : 'missing',
+    secret_access_key: SECRET_KEY ? (SECRET_KEY.length === 64 ? 'looks right' : `is ${SECRET_KEY.length} characters; Cloudflare's are 64`) : 'missing',
+    bucket: BUCKET,
+    public_url: /^https:\/\//.test(PUBLIC_URL) ? 'looks right' : PUBLIC_URL ? 'should start with https://' : 'missing',
+  };
+  if (!videoStorageReady()) return { ok: false, reason: 'Some of the R2 settings are missing in Vercel.', setup };
+
+  const key = `videos/storage-check-${newId()}.mp4`;
+  const body = Buffer.from('klal storage check');
+  const headers = { 'content-length': body.length, 'content-type': 'video/mp4' };
+  const put = await tryOnce('PUT', r2Url('PUT', key, headers, 60), { headers: { 'Content-Type': 'video/mp4' }, body });
+  const result = { setup, upload: put };
+  if (put.status === 0) {
+    result.ok = false;
+    result.reason = `The site could not reach Cloudflare storage (${put.code}). The Account ID in Vercel is probably wrong.`;
+    return result;
+  }
+  if (put.status < 200 || put.status >= 300) {
+    // The same upload with only the type signed tells a key problem from a
+    // problem with how the size is signed.
+    const plain = await tryOnce('PUT', r2Url('PUT', key, { 'content-type': 'video/mp4' }, 60), { headers: { 'Content-Type': 'video/mp4' }, body });
+    result.upload_type_only = plain;
+    result.ok = false;
+    if (plain.status >= 200 && plain.status < 300) {
+      result.reason = 'The key works, but Cloudflare refused the signed size. This is a fix on the code side.';
+      await fetch(r2Url('DELETE', key, {}, 60), { method: 'DELETE' }).catch(() => {});
+    } else {
+      result.reason = R2_REASONS[put.code] || `Cloudflare refused the upload (${put.status} ${put.code || 'no code'}).`;
+    }
+    return result;
+  }
+  const view = await tryOnce('GET', `${PUBLIC_URL}/${key}`);
+  result.view = view;
+  await fetch(r2Url('DELETE', key, {}, 60), { method: 'DELETE' }).catch(() => {});
+  result.ok = view.status === 200;
+  result.reason = result.ok
+    ? 'Uploading and playing both work. If a phone still cannot upload, the upload permission rule (CORS) is the thing to check.'
+    : `Uploading works, but the video could not be opened at the public address (${view.status || view.code}). Check R2_PUBLIC_URL in Vercel and that the bucket's Public Development URL is on.`;
+  return result;
+}
