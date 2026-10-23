@@ -1,7 +1,7 @@
 import React, { useEffect, useId, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '@/api/client';
-import { List, Map as MapIcon, SlidersHorizontal, MessageCircle, Plus, MapPin, Globe, ChevronDown, LocateFixed } from 'lucide-react';
+import { List, Map as MapIcon, SlidersHorizontal, MessageCircle, Plus, MapPin, Globe, ChevronDown, LocateFixed, X } from 'lucide-react';
 import ResourceCard from '@/components/ResourceCard';
 import { LoadingCards, Spinner } from '@/components/Loading';
 import DirectoryMap from '@/components/DirectoryMap';
@@ -10,14 +10,14 @@ import SuggestInput from '@/components/SuggestInput';
 import CountrySelect from '@/components/CountrySelect';
 import { placeMatcher } from '@/lib/place';
 import { countryName, inCountry } from '@/lib/countries';
-import { KITCHENS, kitchenMatches, kitchenOf } from '@/lib/kitchen';
+import { kitchenAppliesTo, kitchenMatches } from '@/lib/kitchen';
 import { lookupPlaces } from '@/lib/placeLookup';
 import { providerPath } from '@/lib/paths';
 import { categoryLabel } from '@/lib/categories';
 import { OWNERSHIP_FILTERS, ownershipMatches, ownershipRank, readOwnershipFilter, saveOwnershipFilter } from '@/lib/ownership';
 import { milesTo, useUserLocation } from '@/lib/userLocation';
 import CityInput from '@/components/CityInput';
-import { EVERYDAY_MILES, QUICK_CATEGORIES, everydayRank } from '@/lib/everyday';
+import { EVERYDAY_MILES, PICKS_SHOWN, QUICK_CATEGORIES, categoryPicks, everydayRank, kindOf, quickLabel } from '@/lib/everyday';
 
 // A search id, so a contact action can be attributed to the search that led
 // to it — "did this search actually help anyone" is the only question worth
@@ -35,7 +35,7 @@ export default function Browse() {
   // search: going back to Home or Resources finds their own Where box empty,
   // not "Hollywood" carried over from the results.
   const [place, setPlace] = useState(params.get('location') || '');
-  const [category, setCategory] = useState(params.get('category') || '');
+  const [category, setCategory] = useState(params.get('category') || (params.get('kitchen') ? 'Food & Catering' : ''));
   // The country picked, '' for Everywhere picked, or null for none picked yet,
   // when the box starts on the person's own country (worked out below).
   const [pickedCountry, setCountry] = useState(() => {
@@ -43,6 +43,14 @@ export default function Browse() {
     return given == null || given === '' ? null : given === EVERYWHERE ? '' : given;
   });
   const [kitchen, setKitchen] = useState(params.get('kitchen') || '');
+  // The kind picked from the second row of picks (Restaurants, Women's…),
+  // as kindOf's id. Belongs to the category, so it goes when the category does.
+  const [kind, setKind] = useState(params.get('type') || '');
+  const [morePicks, setMorePicks] = useState(false);
+  const chooseCategory = (value) => {
+    setCategory(value); setKind(''); setMorePicks(false);
+    if (!kitchenAppliesTo(value)) setKitchen('');
+  };
   // Closest first is the default whenever we know where the person is: the
   // spot "Near me" sent, else their profile city, or the place a guest picked
   // or their browser shared. A caterer search from Brooklyn should open on
@@ -128,19 +136,19 @@ export default function Browse() {
   useEffect(() => {
     const next = new URLSearchParams(location.search);
     const set = (name, value) => { if (value) next.set(name, value); else next.delete(name); };
-    set('q', q); set('location', place); set('category', category); set('country', pickedCountry === '' ? EVERYWHERE : pickedCountry); set('kitchen', kitchen);
+    set('q', q); set('location', place); set('category', category); set('country', pickedCountry === '' ? EVERYWHERE : pickedCountry); set('kitchen', kitchen); set('type', kind);
     set('lat', spot && spot.lat.toFixed(4)); set('lng', spot && spot.lng.toFixed(4));
     const query = next.toString();
     const url = `${location.pathname}${query ? `?${query}` : ''}${location.hash}`;
     if (url !== `${location.pathname}${location.search}${location.hash}`) window.history.replaceState(window.history.state, '', url);
-  }, [q, place, category, pickedCountry, kitchen, spot]);
+  }, [q, place, category, pickedCountry, kitchen, kind, spot]);
 
   // Every word typed and the place both count; see @/lib/search. Everything
   // but the category is applied here, so the category list can count what
   // each choice would show for this search.
   const search = useMemo(() => searchDirectory(providers, { q, where: place, country }), [providers, q, place, country]);
   const scoreOf = useMemo(() => new Map(search.results.map((r) => [r.provider.id, r.score])), [search]);
-  const passes = (p) => (!verified || p.verified) && ownershipMatches(p, owned) && (!category || p.category === category) && kitchenMatches(p, kitchen);
+  const passes = (p) => (!verified || p.verified) && ownershipMatches(p, owned) && (!category || p.category === category) && kitchenMatches(p, kitchen) && (!kind || kindOf(p)?.id === kind);
 
   // With a search typed, the listings that are what was asked for come first
   // (a search for shul opens on the shuls), and the chosen sort orders each
@@ -208,7 +216,7 @@ export default function Browse() {
       other = wide.map((r) => r.provider).filter((p) => passes(p) && !seen.has(p.id));
     }
     return { results: order(hits.map(withDistance)), wide: order(anywhere.map(withDistance)), elsewhere: order(other.map(withDistance), otherScores), askedPlace: where };
-  }, [search, category, sort, verified, owned, here?.lat, here?.lng, country, kitchen]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [search, category, sort, verified, owned, here?.lat, here?.lng, country, kitchen, kind]); // eslint-disable-line react-hooks/exhaustive-deps
   // Where the results are, in words: "Boca Raton", "Israel", "Jerusalem, Israel".
   const whereText = [askedPlace, country].filter(Boolean).filter((s, i, all) => all.indexOf(s) === i).join(', ');
 
@@ -217,9 +225,19 @@ export default function Browse() {
   // results, never the whole directory.
   const scoped = useMemo(() => search.results.map((r) => r.provider).filter((p) => (!verified || p.verified) && ownershipMatches(p, owned)), [search, verified, owned]);
   const countFor = (name) => scoped.filter((p) => p.category === name).length;
-  // The Meat / Dairy filter shows once food is in the picture: food chosen,
-  // or a search that turned up places with a kitchen label.
-  const showKitchen = !!kitchen || category === 'Food & Catering' || scoped.some((p) => kitchenOf(p) && (!category || p.category === category));
+  // The picks inside the chosen category, from what it has on screen before
+  // any of them is applied, so the row stays put as they are tapped.
+  const picks = useMemo(() => (category
+    ? categoryPicks(scoped.filter((p) => p.category === category), { kitchens: kitchenAppliesTo(category), kitchenFor: kitchenMatches })
+    : []), [scoped, category]);
+  const isOn = (pick) => (pick.kind === 'kitchen' ? kitchen === pick.id : kind === pick.id);
+  const togglePick = (pick) => {
+    const set = pick.kind === 'kitchen' ? setKitchen : setKind;
+    set(isOn(pick) ? '' : pick.id);
+  };
+  // About five at a time; More shows the rest. One that is on always shows.
+  const shownPicks = morePicks ? picks : picks.filter((p, i) => i < PICKS_SHOWN || isOn(p));
+  const hiddenPicks = picks.length - shownPicks.length;
 
   // The numbers beside places in the Where box are what picking that place
   // would show with everything else on screen kept: the words typed, the
@@ -228,21 +246,21 @@ export default function Browse() {
   // A country nobody picked does not narrow them, so a place abroad is still
   // offered, and picking it opens on Everywhere (see startingCountry).
   const countPlace = useMemo(() => placeCounter(providers, { q, country: pickedCountry || '', keep: passes }),
-    [providers, q, pickedCountry, category, verified, owned, kitchen]); // eslint-disable-line react-hooks/exhaustive-deps
+    [providers, q, pickedCountry, category, verified, owned, kitchen, kind]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Suggestions under the keyword box count what is listed in the place being
   // searched, so they never promise results the page will not show.
   const navigate = useNavigate();
   const pickKeyword = (item) => {
     if (item.kind === 'listing') navigate(providerPath(item.value));
-    else if (item.kind === 'category') { setCategory(item.value); setQ(''); }
+    else if (item.kind === 'category') { chooseCategory(item.value); setQ(''); }
     else setQ(item.value);
   };
 
   // The ownership filter is left out: it is remembered, so counting it would
   // log a search every time someone who set it opens the page. So is a
   // country nobody picked: every visit starts on one.
-  const isSearch = !!(q || place || category || verified || pickedCountry || kitchen);
+  const isSearch = !!(q || place || category || verified || pickedCountry || kitchen || kind);
 
   // Every search is recorded, not only the ones where someone clicks the
   // button — most arrive from a link with the query already in the URL. The
@@ -290,7 +308,7 @@ export default function Browse() {
   // comes with somewhere to look.
   const otherPlaces = [...new Set(elsewhere.map((p) => (p.city || '').trim()).filter(Boolean))].slice(0, 6);
 
-  const clearFilters = () => { setSpot(null); setLocationOff(false); setQ(''); choosePlace(''); setCountry(null); setCategory(''); setVerified(false); setOwned(''); setKitchen(''); };
+  const clearFilters = () => { setSpot(null); setLocationOff(false); setQ(''); choosePlace(''); setCountry(null); setCategory(''); setVerified(false); setOwned(''); setKitchen(''); setKind(''); };
 
   return <div className="page-shell py-8">
     <div className="mb-7">
@@ -314,7 +332,7 @@ export default function Browse() {
         <LocateFixed size={16} className="text-brand-teal" />{finding ? 'Finding you…' : 'Near me'}
       </button>
       <CountrySelect wrapperClassName="md:col-span-2" labelClassName="left-3 right-9 mt-0.5 text-sm" className="field" providers={providers} value={country} onChange={chooseCountry} />
-      <select className="field md:col-span-2" value={category} onChange={(e) => setCategory(e.target.value)}>
+      <select className="field md:col-span-2" value={category} onChange={(e) => chooseCategory(e.target.value)}>
         <option value="">All categories</option>
         {categories.map((c) => <option key={c.id} value={c.name} disabled={countFor(c.name) === 0 && c.name !== category}>{categoryLabel(c.name)}</option>)}
       </select>
@@ -325,14 +343,10 @@ export default function Browse() {
         <option value="recent">Recently Added</option>
         <option value="alpha">Alphabetical</option>
       </select>
-      {showKitchen && <select className="field md:col-span-3" value={kitchen} onChange={(e) => setKitchen(e.target.value)} aria-label="Meat, dairy or fish">
-        <option value="">Meat, dairy or fish: any</option>
-        {KITCHENS.map((k) => <option key={k.id} value={k.id}>{k.label}</option>)}
-      </select>}
       <select className="field md:col-span-3" value={owned} onChange={(e) => setOwned(e.target.value)} aria-label="Jewish-owned or not">
         {OWNERSHIP_FILTERS.map((f) => <option key={f.id || 'all'} value={f.id}>{f.id ? f.label : 'Jewish-owned or not: All'}</option>)}
       </select>
-      <label className={`flex items-center gap-2 px-2 text-sm ${showKitchen ? 'md:col-span-2' : 'md:col-span-5'}`}>
+      <label className="flex items-center gap-2 px-2 text-sm md:col-span-5">
         <input type="checkbox" checked={verified} onChange={(e) => setVerified(e.target.checked)} /> Verified only
       </label>
       {/* Last of the filters, and filled teal so it reads as the one action in a stack of boxes. */}
@@ -378,7 +392,7 @@ export default function Browse() {
       {/* When there is nothing local, say that — a bare "0 found" sitting
           above the clearly-labelled listings from other communities is the
           same confusion the padded count used to cause. */}
-      <span className={`order-1 min-w-0 flex-1 text-sm font-medium ${category ? '' : 'md:basis-full'}`}>
+      <span className="order-1 min-w-0 flex-1 text-sm font-medium md:basis-full">
         {!loaded
           ? <span className="inline-flex items-center gap-2 text-brand-body"><Spinner />Finding listings…</span>
           : results.length > 0
@@ -387,13 +401,25 @@ export default function Browse() {
             ? <>No matches{whereText ? <> in {whereText}</> : null}{elsewhere.length > 0 ? ` · ${elsewhere.length} elsewhere` : ''}</>
             : <>0 resources found</>}
       </span>
-      {/* Quick picks beside List / Map until a category is chosen, so an
-          open page offers the common things in one tap instead of a
-          dropdown. Only ones with something in the search on screen. */}
-      {!category && providers.length > 0 && <div className="quick-cats order-3 w-full md:order-2 md:w-auto md:flex-1" role="group" aria-label="Quick categories">
-        {QUICK_CATEGORIES.filter((c) => countFor(c.name) > 0).map((c) => (
-          <button key={c.name} type="button" onClick={() => setCategory(c.name)} className="quick-cat">{c.label}</button>
+      {/* Quick picks beside List / Map, so the common things are one tap
+          instead of a dropdown. Before a category is chosen they are the
+          categories; after, the chosen one (tap to go back) and the kinds
+          inside it that the search on screen has. Only ones with listings. */}
+      {providers.length > 0 && <div className={`quick-cats order-3 w-full md:order-2 md:w-auto md:flex-1 ${category ? 'wrap' : ''}`} role="group" aria-label="Quick picks">
+        {!category && QUICK_CATEGORIES.filter((c) => countFor(c.name) > 0).map((c) => (
+          <button key={c.name} type="button" onClick={() => chooseCategory(c.name)} className="quick-cat">{c.label}</button>
         ))}
+        {category && <>
+          <button type="button" onClick={() => chooseCategory('')} className="quick-cat on" aria-label={`${quickLabel(category)}: show all categories`}>
+            <X size={13} />{quickLabel(category)}
+          </button>
+          {shownPicks.map((p) => (
+            <button key={`${p.kind}:${p.id}`} type="button" onClick={() => togglePick(p)} aria-pressed={isOn(p)} className={`quick-cat ${isOn(p) ? 'picked' : ''}`}>{p.label}</button>
+          ))}
+          {(hiddenPicks > 0 || morePicks) && picks.length > PICKS_SHOWN && <button type="button" onClick={() => setMorePicks((v) => !v)} className="quick-cat more">
+            {morePicks ? 'Less' : 'More'}<ChevronDown size={13} className={morePicks ? 'rotate-180' : ''} />
+          </button>}
+        </>}
       </div>}
       <div className="order-2 ml-auto flex shrink-0 rounded-xl bg-brand-surface p-1 ring-1 ring-brand-line md:order-3">
         <button onClick={() => setView('list')} className={`view-button ${view === 'list' ? 'active' : ''}`}><List size={16} />List</button>
