@@ -4,7 +4,7 @@ import { ArrowRight, Compass, Wrench, Store, Handshake, Plus } from 'lucide-reac
 import { api } from '@/api/client';
 import useVouchesEnabled from '@/hooks/useVouchesEnabled';
 import { safeReturnTo } from '@/lib/authReturnTo';
-import { PROFILE_TYPES } from '@/lib/affiliations';
+import { PROFILE_TYPES, PROFILE_TYPE_BY_ID } from '@/lib/affiliations';
 import InviteButton from '@/components/InviteButton';
 import { locateFromCity } from '@/hooks/useDetectLocation';
 import CityInput from '@/components/CityInput';
@@ -37,7 +37,7 @@ export default function Welcome() {
       if (!(await api.auth.hasAccount())) return api.auth.redirectToLogin('/welcome');
       const u = await api.auth.me();
       setMe(u);
-      setType(u.profile_type || 'community_member');
+      setType(PROFILE_TYPE_BY_ID[u.profile_type]?.profileOnly ? 'community_member' : (u.profile_type || 'community_member'));
       setName(u.full_name || '');
       setCity(u.home_city || u.city || '');
       api.entities.User.list('-created_date', 500).then(setMembers).catch(() => setMembers([]));
@@ -100,7 +100,7 @@ export default function Welcome() {
         <label>Your name (optional for now)<input className="field" value={name} onChange={(e) => setName(e.target.value)} placeholder="As people in the community know you" autoFocus/></label>
         {twin && <div className="rounded-lg bg-brand-gold-bg p-4 text-sm text-brand-gold-ink"><p className="font-semibold">There is already a {twin.full_name} on Klal{twin.headline ? ` — ${String(twin.headline).trim().replace(/[.\s]+$/, '')}` : ''}.</p><p className="mt-1">If that is you, <button type="button" onClick={() => api.auth.logout('/login')} className="font-semibold underline">log in to that account</button> instead of starting a second one. If it is someone else with your name, carry on.</p></div>}
         <div><h2 className="section-title">What brings you to Klal?</h2><p className="helper">You can do all three. This just picks where we start.</p></div>
-        <div className="grid gap-3">{PROFILE_TYPES.map((t) => { const I = ICONS[t.id]; return <button key={t.id} type="button" onClick={() => setType(t.id)} className={`flex items-start gap-3 rounded-lg p-4 text-left ring-1 transition ${type === t.id ? 'bg-brand-tint ring-brand-teal' : 'bg-brand-surface ring-brand-line hover:bg-brand-tint/50'}`}><span className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${type === t.id ? 'bg-brand-navy text-white' : 'bg-brand-tint text-brand-teal'}`}><I size={20}/></span><span><span className="block font-semibold text-brand-ink">{t.label}</span><span className="block text-sm text-brand-body">{!vouchesOn && t.blurbNoVouches || t.blurb}</span></span></button>; })}</div>
+        <div className="grid gap-3">{PROFILE_TYPES.filter((t) => !t.profileOnly).map((t) => { const I = ICONS[t.id]; return <button key={t.id} type="button" onClick={() => setType(t.id)} className={`flex items-start gap-3 rounded-lg p-4 text-left ring-1 transition ${type === t.id ? 'bg-brand-tint ring-brand-teal' : 'bg-brand-surface ring-brand-line hover:bg-brand-tint/50'}`}><span className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${type === t.id ? 'bg-brand-navy text-white' : 'bg-brand-tint text-brand-teal'}`}><I size={20}/></span><span><span className="block font-semibold text-brand-ink">{t.label}</span><span className="block text-sm text-brand-body">{!vouchesOn && t.blurbNoVouches || t.blurb}</span></span></button>; })}</div>
         <div className="flex justify-end"><button type="button" onClick={() => next({ profile_type: type, full_name: name.trim() })} className="primary">Continue<ArrowRight size={16}/></button></div>
       </>}
 
