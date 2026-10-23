@@ -760,6 +760,33 @@ ok(await annTitles(admin) === 'Big news,Old news,Taken down', 'admins see all of
 const annUnpin = await call('PUT', `/entities/Announcement/${annLive.data?.id}`, { token: admin, body: { pinned: false } });
 ok(annUnpin.status === 200 && await annTitles(null) === '', 'unpinning takes it off for everyone', await annTitles(null));
 
+// ---- the master admin ----------------------------------------------------
+// One admin claims it; after that no other admin can demote, suspend, edit,
+// reset or delete them, and they can still manage the other admins.
+const meOf = async (token) => (await call('GET', '/auth/me', { token })).data;
+const masterSelf = await meOf(admin);
+const masterByMember = await call('POST', '/users/me/master-admin', { token: userA });
+ok(masterByMember.status === 403, 'a member cannot claim master admin', String(masterByMember.status));
+const claimed = await call('POST', '/users/me/master-admin', { token: admin });
+ok(claimed.status === 200 && claimed.data?.master_admin === true, 'an admin claims master admin', String(claimed.status));
+ok((await call('POST', '/users/me/master-admin', { token: admin })).status === 409, 'there is only ever one master admin');
+const selfPromote = await call('PUT', '/auth/me', { token: userA, body: { master_admin: true } });
+ok(selfPromote.status === 200 && (await meOf(userA)).master_admin !== true, 'a member cannot make themselves master admin through their profile');
+const otherAdminId = (await meOf(userB)).id;
+ok((await call('PUT', `/users/${otherAdminId}/role`, { token: admin, body: { role: 'admin' } })).status === 200, 'the master admin makes another admin');
+const tries = [
+  ['PUT', `/users/${masterSelf.id}/role`, { role: 'user' }],
+  ['PUT', `/users/${masterSelf.id}`, { disabled: true }],
+  ['POST', `/users/${masterSelf.id}/reset-password`, undefined],
+  ['DELETE', `/users/${masterSelf.id}`, undefined],
+];
+for (const [method, path, body] of tries) {
+  const r = await call(method, path, { token: userB, body });
+  ok(r.status === 403, `another admin is refused: ${method} ${path.replace(masterSelf.id, 'master')}`, String(r.status));
+}
+ok((await meOf(admin)).role === 'admin', 'the master admin is still an admin');
+ok((await call('PUT', `/users/${otherAdminId}/role`, { token: admin, body: { role: 'user' } })).status === 200, 'the master admin can still remove another admin');
+
 // ---- a listing that turns private takes its vouches with it --------------
 // The dangerous case is not a listing that was always sensitive — vouching on
 // one of those is already refused. It is a listing that becomes sensitive
