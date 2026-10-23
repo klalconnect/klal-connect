@@ -95,8 +95,12 @@ export default function Home() {
     .sort((a, b) => b.count - a.count || (a.order ?? 99) - (b.order ?? 99))
     .slice(0, 8), [categories, local]);
 
+  const friday = new Date().getDay() === 5;
 
   return <div className="page-shell space-y-14 py-8 md:space-y-16 md:py-12">
+    {/* On Friday, the visitor's own Friday, the times and parsha are what
+        people come for, so the strip moves up from Near you to the very top. */}
+    {friday && <ShabbosTimesBar className="-mb-8 md:-mb-10" />}
     {/* The feed leads: Klal Connect is first a place where the frum business
         world talks to itself. The directory follows, as what you get once
         you're here. */}
@@ -148,7 +152,7 @@ export default function Home() {
       </div>
     </section>}
 
-    <LocalSection providers={providers} community={community} />
+    <LocalSection providers={providers} community={community} showTimes={!friday} />
 
     <section>
       <div className="section-head">
@@ -249,18 +253,25 @@ function FeedPreview() {
 // Bahamas; with no idea where the person is, it offers to find out.
 const byUse = (a, b) => (b.usage_count || 0) - (a.usage_count || 0) || String(b.created_date || '').localeCompare(String(a.created_date || ''));
 
-function LocalSection({ providers, community }) {
+// City, candle lighting, Havdalah and the parsha in one strip. Nothing when
+// there is no place to work from yet.
+function ShabbosTimesBar({ className = '' }) {
   const { status } = useShabbosStatus();
-  const { origin, where, ask } = useNearHere(providers, community);
-  const near = useMemo(() => nearbyListings(providers, origin, { rank: byUse }), [providers, origin]);
-  const shown = near.slice(0, 4);
   const times = status?.cityLabel && (status.startsAt || status.endsAt) ? status : null;
-  const timesBar = times && <div className="mb-4 flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg bg-brand-surface px-4 py-3 text-sm ring-1 ring-brand-line">
+  if (!times) return null;
+  return <div className={`flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg bg-brand-surface px-4 py-3 text-sm ring-1 ring-brand-line ${className}`}>
     <span className="font-semibold text-brand-ink">{times.cityLabel}</span>
     {times.startsAt && <span className="inline-flex items-center gap-1.5 text-brand-body"><Flame size={14} className="text-brand-gold-ink" />Candle lighting <b className="text-brand-ink">{timeInZone(times.startsAt, times.tzid)}</b></span>}
     {times.endsAt && <span className="inline-flex items-center gap-1.5 text-brand-body"><Moon size={14} className="text-brand-teal" />Havdalah <b className="text-brand-ink">{timeInZone(times.endsAt, times.tzid)}</b></span>}
     {times.parsha && <span className="text-brand-muted">{times.parsha}</span>}
   </div>;
+}
+
+function LocalSection({ providers, community, showTimes = true }) {
+  const { origin, where, ask } = useNearHere(providers, community);
+  const near = useMemo(() => nearbyListings(providers, origin, { rank: byUse }), [providers, origin]);
+  const shown = near.slice(0, 4);
+  const timesBar = showTimes && <ShabbosTimesBar className="mb-4" />;
 
   if (!origin) return <div>{timesBar}<NearYouPrompt ask={ask} title="Help near you">Or pick a community above.</NearYouPrompt></div>;
   if (shown.length === 0) return timesBar || null;
