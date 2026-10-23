@@ -33,7 +33,7 @@ import { put as putFile, usingObjectStorage, UPLOAD_DIR } from './storage.js';
 import { mountSeo, sitemap, robots, siteOrigin } from './seo.js';
 import { healthReport } from './health.js';
 import { vouchesEnabled, videosSwitchOn, forgetSettings } from './settings.js';
-import { videoUploadLink, videoStorageReady, VIDEO_MAX_MB, VIDEO_MAX_SECONDS } from './video.js';
+import { videoUploadLink, videoStorageReady, checkVideoStorage, VIDEO_MAX_MB, VIDEO_MAX_SECONDS } from './video.js';
 
 // The built index.html, baked in at build time by scripts/emit-shell.mjs.
 // Absent in dev and in tests, where Vite serves the shell itself.
@@ -1287,6 +1287,11 @@ app.get('/api/geo/ip', requireAuth, async (req, res, next) => {
 // names members and their addresses.
 app.get('/api/admin/health', requireAdmin, async (_req, res, next) => {
   try { res.json(await healthReport()); } catch (err) { next(err); }
+});
+
+// Admin → Site switches → "Test video storage" (server/video.js).
+app.post('/api/admin/video-check', requireAdmin, async (_req, res, next) => {
+  try { res.json(await checkVideoStorage()); } catch (err) { next(err); }
 });
 
 // ------------------------------------------------------------------- seo --

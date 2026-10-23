@@ -375,6 +375,7 @@ export const api = {
     deleteUser: (id) => request('DELETE', `/users/${encodeURIComponent(id)}`),
     deleteListing: (id) => request('DELETE', `/admin/listings/${encodeURIComponent(id)}`),
     health: () => request('GET', '/admin/health'),
+    videoCheck: () => request('POST', '/admin/video-check'),
   }, entities, auth, functions: functionsApi, integrations, geo, getConfig };
 export { ApiError };
 export default api;
