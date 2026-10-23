@@ -76,3 +76,35 @@ export async function fixGarbledNames() {
   if (fixed) console.log(`[listings] fixed ${fixed} garbled listing names`);
   return fixed;
 }
+
+// Austin had the Chabad mikvah twice (Eli, 2026-10-23: "delete one"). The
+// Mikvah.org listing is the real one, filed as a mikvah with its hours,
+// contact and supervision. The other came from Chabad.org's center list, was
+// filed as a shul, and duplicates the Chabad campus already listed at the
+// same address. It is unpublished the way Admin's "Unpublish" does it, so it
+// can be brought back; anything people attached to it moves to the keeper
+// first.
+const DUPLICATE_KEY = 'listing_austin_mikvah_duplicate_2026_10_23';
+const DUPLICATE = { remove: '2e2499e42a92474ab440dbb2', keep: 'a44e604de30c4c37a7229ca4' };
+const ATTACHED = ['CommunityNote', 'Vouch', 'ProviderUsage', 'SavedProvider', 'ClaimRequest', 'ListingChangeRequest', 'PrivateReport'];
+
+export async function removeDuplicateListing() {
+  if ((await store.filter('Setting', { key: DUPLICATE_KEY })).length) return 0;
+  const [gone, keep] = await Promise.all([DUPLICATE.remove, DUPLICATE.keep].map((id) => store.get('Provider', id).catch(() => null)));
+  let moved = 0;
+  if (gone && keep && gone.status !== 'hidden') {
+    for (const entity of ATTACHED) {
+      const rows = await store.filter(entity, { provider_id: gone.id }).catch(() => []);
+      for (const row of rows) {
+        await store.update(entity, row.id, { provider_id: keep.id, ...(row.provider_name ? { provider_name: keep.name } : {}) });
+        moved += 1;
+      }
+    }
+    const counts = ['usage_count', 'vouch_count'].filter((k) => gone[k] > 0);
+    if (counts.length) await store.update('Provider', keep.id, Object.fromEntries(counts.map((k) => [k, (keep[k] || 0) + gone[k]])));
+    await store.update('Provider', gone.id, { status: 'hidden' });
+    console.log(`[listings] unpublished duplicate ${gone.id} (${gone.name}); moved ${moved} attached rows to ${keep.id}`);
+  }
+  await store.create('Setting', { key: DUPLICATE_KEY, value: String(moved) });
+  return moved;
+}
