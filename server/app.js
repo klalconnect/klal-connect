@@ -755,6 +755,60 @@ app.put('/api/users/:id', requireAdmin, async (req, res, next) => {
   res.json(userToPublic(updated));
 });
 
+// Admin only: delete a member for good. Suspending (disabled, above) is the
+// reversible step; this is the one that cannot be undone, which is why the
+// admin screen asks twice. What they wrote and what was addressed to them
+// goes with them: posts, comments, messages, connections, saves, alerts.
+// Listings and company pages are directory information rather than theirs
+// alone, so those stay, and a listing they had claimed goes back to unclaimed.
+// The audit trail (ActivityEvent) is kept.
+const MEMBER_LINKS = ['created_by_id', 'recipient_id', 'requester_id', 'user_id'];
+const KEEP_ON_MEMBER_DELETE = new Set(['Provider', 'Company', 'Category', 'Setting', 'ActivityEvent']);
+app.delete('/api/users/:id', requireAdmin, async (req, res, next) => {
+  try {
+    const target = await users.byId(req.params.id);
+    if (!target) return res.status(404).json({ error: 'Not found' });
+    if (target.id === req.user.id) return res.status(400).json({ error: 'You cannot delete your own account from here.' });
+    if (target.email === GUEST_EMAIL) return res.status(400).json({ error: 'The guest account cannot be deleted.' });
+    let removed = 0;
+    for (const entity of ENTITIES) {
+      if (KEEP_ON_MEMBER_DELETE.has(entity)) continue;
+      const seen = new Set();
+      for (const field of MEMBER_LINKS) {
+        for (const row of await store.filter(entity, { [field]: target.id })) {
+          if (seen.has(row.id)) continue;
+          seen.add(row.id);
+          await store.delete(entity, row.id);
+          removed += 1;
+        }
+      }
+    }
+    for (const listing of await store.filter('Provider', { owner_id: target.id })) {
+      await store.update('Provider', listing.id, { owner_id: null, claimed: false });
+    }
+    await users.delete(target.id);
+    await store.create('ActivityEvent', { type: 'member_deleted', target_id: target.id, email: target.email, removed_rows: removed, by: 'admin' }, req.user);
+    res.json({ ok: true, removed });
+  } catch (err) { next(err); }
+});
+
+// Admin only: delete a listing for good, with what hangs off it (saves,
+// "used them" marks, notes, vouches, claims, suggested edits, reports).
+// Suspending is setting its status to hidden, which the moderation PUT does.
+const LISTING_LINKED = [['SavedProvider', 'provider_id'], ['ProviderUsage', 'provider_id'], ['CommunityNote', 'provider_id'], ['Vouch', 'provider_id'], ['ClaimRequest', 'provider_id'], ['ListingChangeRequest', 'provider_id'], ['ListingReport', 'resource_id']];
+app.delete('/api/admin/listings/:id', requireAdmin, async (req, res, next) => {
+  try {
+    const listing = await store.get('Provider', req.params.id);
+    if (!listing) return res.status(404).json({ error: 'Not found' });
+    for (const [entity, field] of LISTING_LINKED) {
+      for (const row of await store.filter(entity, { [field]: listing.id })) await store.delete(entity, row.id);
+    }
+    await store.delete('Provider', listing.id);
+    await store.create('ActivityEvent', { type: 'listing_deleted', entity: 'Provider', target_id: listing.id, name: listing.name || '', actor_role: req.user.role }, req.user);
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
 const tempPassword = () => {
   const alphabet = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   const bytes = randomBytes(12);
@@ -908,7 +962,7 @@ app.post('/api/auth/google', async (req, res, next) => {
     let created = false;
     if (row) {
       if (row.email === GUEST_EMAIL) return res.status(400).json({ error: 'That account cannot be used.' });
-      if (row.data?.disabled) return res.status(403).json({ error: 'This account has been deactivated.' });
+      if (row.data?.disabled) return res.status(403).json({ error: 'This account has been suspended.' });
       // Google vouches for the address: an unverified email/password account
       // is verified by this, and remembers its Google id.
       row = await users.update(row.id, { verified: true, google_sub: g.sub, ...(row.data?.avatar_url ? {} : (g.picture ? { avatar_url: g.picture } : {})) });
@@ -947,7 +1001,7 @@ app.post('/api/auth/login', async (req, res, next) => {
   // existed, deactivation removed the profile from listings while the
   // password went on working.
   if (row.data?.disabled === true) {
-    return res.status(403).json({ error: 'This account has been deactivated. Please contact us if you think that is a mistake.' });
+    return res.status(403).json({ error: 'This account has been suspended. Please contact us if you think that is a mistake.' });
   }
   // An account that registered while email was on but never entered its code
   // is not in yet. A fresh code goes out and the client shows the same

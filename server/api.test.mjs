@@ -545,6 +545,48 @@ ok(deadMe.status === 401, 'a deactivated account\'s existing token stops working
 const deadLogin = await call('POST', '/auth/login', { body: { email: deadEmail, password: 'password123' } });
 ok(deadLogin.status === 403, 'a deactivated account cannot sign back in', String(deadLogin.status));
 
+// Admin delete: a member's account and what they posted go; listings stay
+// and come unclaimed. Only an admin may, and never on themselves.
+const goneEmail = `gone${Date.now()}@example.com`;
+const goneReg = await call('POST', '/auth/register', { body: { email: goneEmail, password: 'password123' } });
+const goneTok = (await call('POST', '/auth/verify-otp', { body: { email: goneEmail, otpCode: goneReg.data.dev_code } })).data.access_token;
+const goneId = (await call('GET', '/auth/me', { token: goneTok })).data.id;
+await call('PUT', '/auth/me', { token: goneTok, body: { full_name: 'Gone Member' } });
+const gonePost = await call('POST', '/functions/createPost', { token: goneTok, body: { body: 'A post that should go with its author.', post_type: 'update' } });
+const goneListing = await createOwned(goneTok, { name: `Gone Owner Listing ${Date.now()}`, category: 'Other', city: 'Lakewood', state: 'NJ' });
+const goneListingId = goneListing.data?.provider?.id;
+const selfDelete = await call('DELETE', `/users/${(await call('GET', '/auth/me', { token: admin })).data.id}`, { token: admin });
+ok(selfDelete.status === 400, 'an admin cannot delete their own account', String(selfDelete.status));
+const memberDelete = await call('DELETE', `/users/${goneId}`, { token: userA });
+ok(memberDelete.status === 403, 'a member cannot delete another account', String(memberDelete.status));
+const goneDelete = await call('DELETE', `/users/${goneId}`, { token: admin });
+ok(goneDelete.status === 200, 'an admin can delete a member', JSON.stringify(goneDelete.data));
+const goneLogin = await call('POST', '/auth/login', { body: { email: goneEmail, password: 'password123' } });
+ok(goneLogin.status === 401, 'a deleted member cannot sign in', String(goneLogin.status));
+const goneAgain = await call('GET', `/users/${goneId}`, { token: admin });
+ok(goneAgain.status === 404, 'a deleted member is gone from the member list', String(goneAgain.status));
+if (gonePost.data?.post?.id) {
+  const postAfter = await call('GET', `/entities/FeedPost/${gonePost.data.post.id}`, { token: admin });
+  ok(postAfter.status === 404, 'a deleted member\'s posts go with them', String(postAfter.status));
+}
+if (goneListingId) {
+  const listingAfter = (await call('GET', `/entities/Provider/${goneListingId}`, { token: admin })).data;
+  ok(listingAfter && !listingAfter.owner_id && listingAfter.claimed === false, 'a deleted member\'s claimed listing stays, unclaimed', JSON.stringify({ owner_id: listingAfter?.owner_id, claimed: listingAfter?.claimed }));
+  // Suspend hides the listing; delete removes it. Moderators cannot delete.
+  const hide = await call('PUT', `/entities/Provider/${goneListingId}`, { token: admin, body: { status: 'hidden' } });
+  ok(hide.status === 200 && hide.data.status === 'hidden', 'an admin can suspend a listing', String(hide.status));
+  const hiddenRead = await call('GET', `/entities/Provider/${goneListingId}`, { token: userA });
+  ok(hiddenRead.status === 403, 'a suspended listing is not readable by members', String(hiddenRead.status));
+  const memberListingDelete = await call('DELETE', `/admin/listings/${goneListingId}`, { token: userA });
+  ok(memberListingDelete.status === 403, 'a member cannot delete a listing through the admin route', String(memberListingDelete.status));
+  const listingDelete = await call('DELETE', `/admin/listings/${goneListingId}`, { token: admin });
+  ok(listingDelete.status === 200, 'an admin can delete a listing', JSON.stringify(listingDelete.data));
+  const deletedRead = await call('GET', `/entities/Provider/${goneListingId}`, { token: admin });
+  ok(deletedRead.status === 404, 'a deleted listing is gone', String(deletedRead.status));
+} else {
+  ok(false, 'could not create a listing for the delete checks', JSON.stringify(goneListing.data));
+}
+
 // Codes are six digits with a fifteen-minute window, so guessing has to stop.
 const lockEmail = `lock${Date.now()}@example.com`;
 const lockReg = await call('POST', '/auth/register', { body: { email: lockEmail, password: 'password123' } });
