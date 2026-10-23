@@ -219,6 +219,10 @@
   .tab.active { @apply bg-brand-surface text-brand-ink shadow-sm; }
   .view-button { @apply flex items-center gap-1 rounded-lg px-3 py-2 text-xs font-semibold; }
   .view-button.active { @apply bg-brand-navy text-white; }
+  /* Resources quick category picks. One scrolling row on a phone, wrapping on
+     a computer; see-through tint so they sit lightly above the results. */
+  .quick-cats { @apply -mx-1 flex gap-2 overflow-x-auto px-1 pb-1 md:flex-wrap md:overflow-visible; scrollbar-width: none; }
+  .quick-cat { @apply shrink-0 whitespace-nowrap rounded-full bg-brand-tint px-3 py-1.5 text-xs font-semibold text-brand-teal ring-1 ring-transparent hover:ring-brand-teal; }
   .icon-button { @apply grid h-9 w-9 place-items-center rounded-lg text-brand-teal hover:bg-brand-tint active:scale-95 motion-reduce:transform-none; }
   .icon-button svg { @apply h-4 w-4; }
   .admin-nav { @apply flex w-full items-center justify-between rounded-xl px-4 py-3 text-left text-sm font-semibold hover:bg-brand-surface;
