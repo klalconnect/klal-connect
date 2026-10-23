@@ -16,6 +16,7 @@ import { categoryLabel } from '@/lib/categories';
 import { OWNERSHIP_FILTERS, ownershipMatches, ownershipRank, readOwnershipFilter, saveOwnershipFilter } from '@/lib/ownership';
 import { milesTo, useUserLocation } from '@/lib/userLocation';
 import CityInput from '@/components/CityInput';
+import { EVERYDAY_MILES, QUICK_CATEGORIES, everydayRank } from '@/lib/everyday';
 
 // A search id, so a contact action can be attributed to the search that led
 // to it — "did this search actually help anyone" is the only question worth
@@ -117,12 +118,20 @@ export default function Browse() {
   // Among the real answers, Jewish-owned listings come first: in Closest
   // first only against others about as close (the same ~3-mile band), in
   // every other sort ahead of the rest of the tier.
+  //
+  // With nothing typed and no category picked, the everyday things (food,
+  // gemachs) lead instead of whatever is nearest, which is nearly always a
+  // shul or a mikvah; see @/lib/everyday. In Closest first only within
+  // EVERYDAY_MILES, so nothing far away jumps ahead of the town.
+  const everyday = !q.trim() && !category && (sort === 'nearest' || sort === 'used');
+  const lead = (p) => (!everyday ? 0 : sort !== 'nearest' ? everydayRank(p.category)
+    : (p.distance ?? 9999) <= EVERYDAY_MILES ? everydayRank(p.category) : 1000);
   const order = (rows, scores = scoreOf) => {
     const best = Math.max(0, ...rows.map((p) => scores.get(p.id) || 0));
     const tier = (p) => ((scores.get(p.id) || 0) >= best / 2 ? 1 : 0);
     const score = sort === 'nearest' ? tier : (p) => scores.get(p.id) || 0;
     const band = (p) => Math.floor((p.distance ?? 9999) / 3);
-    return [...rows].sort((a, b) => (tier(b) - tier(a))
+    return [...rows].sort((a, b) => (lead(a) - lead(b)) || (tier(b) - tier(a))
       || (sort === 'nearest' ? band(a) - band(b) : 0) || ownershipRank(a, b)
       || (score(b) - score(a)) || (sort === 'nearest' ? (a.distance ?? 9999) - (b.distance ?? 9999)
       : sort === 'used' ? (b.usage_count || 0) - (a.usage_count || 0)
@@ -309,22 +318,33 @@ export default function Browse() {
         guest can change it; a member's comes from their profile city. */}
     {sort === 'nearest' && !(urlLat && urlLng) && <p className="-mt-3 mb-4 flex flex-wrap items-center gap-x-2 px-1 text-xs text-brand-muted">
       <MapPin size={13} className="shrink-0 text-brand-teal" />
-      <span>Closest to {me.city || 'your location'} first{me.source === 'profile' ? ' (your profile city)' : ''}.</span>
+      <span>Closest to {me.city || 'your location'} first{me.source === 'profile' ? ' (your profile city)' : ''}{everyday ? ', with food and gemachs nearby leading' : ''}.</span>
       {me.source !== 'profile' && <button type="button" onClick={() => { me.forget(); setSettingCity(true); }} className="font-semibold text-brand-teal underline-offset-2 hover:underline">Change</button>}
     </p>}
 
-    <div className="mb-3 flex items-center justify-between">
+    {/* On a computer: the count on its own line, then the quick picks with
+        List / Map on their right. On a phone the picks get a row of their own
+        under the count and List / Map, so they are not squeezed. */}
+    <div className="mb-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
       {/* When there is nothing local, say that — a bare "0 found" sitting
           above the clearly-labelled listings from other communities is the
           same confusion the padded count used to cause. */}
-      <span className="text-sm font-medium">
+      <span className={`order-1 min-w-0 flex-1 text-sm font-medium ${category ? '' : 'md:basis-full'}`}>
         {results.length > 0
           ? <>{results.length} {results.length === 1 ? 'resource' : 'resources'} found {whereText ? `in ${whereText}` : 'everywhere'}</>
           : isSearch
             ? <>No matches{whereText ? <> in {whereText}</> : null}{elsewhere.length > 0 ? ` · ${elsewhere.length} elsewhere` : ''}</>
             : <>0 resources found</>}
       </span>
-      <div className="flex rounded-xl bg-brand-surface p-1 ring-1 ring-brand-line">
+      {/* Quick picks beside List / Map until a category is chosen, so an
+          open page offers the common things in one tap instead of a
+          dropdown. Only ones with something in the search on screen. */}
+      {!category && providers.length > 0 && <div className="quick-cats order-3 w-full md:order-2 md:w-auto md:flex-1" role="group" aria-label="Quick categories">
+        {QUICK_CATEGORIES.filter((c) => countFor(c.name) > 0).map((c) => (
+          <button key={c.name} type="button" onClick={() => setCategory(c.name)} className="quick-cat">{c.label}</button>
+        ))}
+      </div>}
+      <div className="order-2 ml-auto flex shrink-0 rounded-xl bg-brand-surface p-1 ring-1 ring-brand-line md:order-3">
         <button onClick={() => setView('list')} className={`view-button ${view === 'list' ? 'active' : ''}`}><List size={16} />List</button>
         <button onClick={() => setView('map')} className={`view-button ${view === 'map' ? 'active' : ''}`}><MapIcon size={16} />Map</button>
       </div>
