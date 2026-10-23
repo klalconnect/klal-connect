@@ -22,6 +22,7 @@ import { listingEditor, normalizeListingPatch, canSetPaymentLink } from '../src/
 import { verificationAfterEdit, pinAfterEdit, hasCoordinate } from '../src/lib/trust.js';
 import { isValidTimeZone } from './shabbos.js';
 import { isScheduled, byPostedAtDesc, byFeedRank } from '../src/lib/scheduledPosts.js';
+import { isLiveAnnouncement } from '../src/lib/announcements.js';
 import { BOOKING_LABELS, DEFAULT_BOOKING_LABEL, withScheme } from '../src/lib/booking.js';
 import { WORK_STATUS_IDS } from '../src/lib/workStatus.js';
 import { isDemoMode } from './db.js';
@@ -131,7 +132,7 @@ app.use((req, res, next) => {
 
 // Which entities a signed-out visitor may read. The directory is public by
 // design; everything else (messages, notifications, reports…) is not.
-const PUBLIC_READ = new Set(['Provider', 'Company', 'Category', 'CommunityNote', 'Vouch', 'FeedPost', 'Comment', 'SkillEndorsement', 'Recommendation', 'Job']);
+const PUBLIC_READ = new Set(['Provider', 'Company', 'Category', 'CommunityNote', 'Vouch', 'FeedPost', 'Comment', 'SkillEndorsement', 'Recommendation', 'Job', 'Announcement']);
 
 // Entities that carry a moderation status. Everyone except an admin sees only
 // published rows — plus their own submissions, so an author can still find the
@@ -283,6 +284,9 @@ async function visibleRows(entity, rows, user) {
   // an admin's Saved page is their own list, not a register of everyone's.
   if (PERSONAL.has(entity)) return rows.filter((row) => !!user && row.created_by_id === user.id);
   if (user?.role === 'admin') return rows;
+  // A Klal Team announcement is public once pinned and until it ends. Drafts,
+  // unpinned and ended ones are the admins' alone (src/lib/announcements.js).
+  if (entity === 'Announcement') return rows.filter((row) => isLiveAnnouncement(row));
   if (isModerator(user) && MODERATED_BY_STAFF.has(entity)) return rows;
 
   // A vouch names the member who gave it and a community note is signed, so on
@@ -383,7 +387,7 @@ const ENTITIES = new Set([
   'ActivityEvent', 'FeedPost', 'FeedLike', 'Message', 'Notification', 'Setting',
   'SavedProvider', 'ProviderUsage', 'ClaimRequest', 'ListingChangeRequest',
   'ListingReport', 'PrivateReport', 'Vouch', 'CommentVote', 'Invite', 'SavedPost',
-  'SkillEndorsement', 'Recommendation', 'Job', 'JobApplication',
+  'SkillEndorsement', 'Recommendation', 'Job', 'JobApplication', 'Announcement',
 ]);
 
 app.param('entity', (req, res, next, entity) => {
@@ -730,6 +734,31 @@ app.get('/api/users', requireAuth, async (req, res, next) => {
   res.json(req.query.limit ? list.slice(0, Number(req.query.limit)) : list);
 });
 
+// The master admin is the site owner's account (isMasterEmail in
+// db-shared.js). No other admin can change its role, suspend, edit, reset or
+// delete it; the master admin can still do all of that to every other admin.
+const protectedMaster = (target, actor) => userToPublic(target).master_admin === true && target.id !== actor?.id;
+const MASTER_LOCKED = 'This is the master admin account. Only its owner can change it.';
+// Only the master admin, and only with the word typed, hands it to another
+// account. They become an admin and the master; the old master stays an
+// admin, now without the protection.
+const HAND_OVER_WORD = 'CONFIRM';
+app.post('/api/users/:id/hand-over-master', requireAdmin, async (req, res, next) => {
+  try {
+    if (req.user.master_admin !== true) return res.status(403).json({ error: 'Only the master admin can hand it over.' });
+    if (String(req.body?.confirm || '').trim() !== HAND_OVER_WORD) return res.status(400).json({ error: `Type ${HAND_OVER_WORD} to hand over master admin.` });
+    const target = await users.byId(req.params.id);
+    if (!target) return res.status(404).json({ error: 'Not found' });
+    if (target.id === req.user.id) return res.status(400).json({ error: 'You are already the master admin.' });
+    if (target.email === GUEST_EMAIL) return res.status(400).json({ error: 'The guest account cannot be the master admin.' });
+    if (target.data?.disabled === true) return res.status(400).json({ error: 'Unsuspend this account first.' });
+    const updated = await users.update(target.id, { role: 'admin', master_admin: true });
+    const me = await users.update(req.user.id, { role: 'admin', master_admin: false });
+    await store.create('ActivityEvent', { type: 'master_admin_handover', target_id: target.id, from: req.user.id }, req.user);
+    res.json({ to: userToPublic(updated), from: userToPublic(me) });
+  } catch (err) { next(err); }
+});
+
 // Admin only: hand a locked-out member a temporary password. Shown once to
 // the admin, never stored in the clear, and every use is audited. This is
 // the way back in while there is no email to send a reset code to.
@@ -737,6 +766,7 @@ app.post('/api/users/:id/reset-password', requireAdmin, async (req, res, next) =
   const target = await users.byId(req.params.id);
   if (!target) return res.status(404).json({ error: 'Not found' });
   if (target.email === GUEST_EMAIL) return res.status(400).json({ error: 'The guest account has no password to reset.' });
+  if (protectedMaster(target, req.user)) return res.status(403).json({ error: MASTER_LOCKED });
   const temp = tempPassword();
   await users.update(target.id, { password_hash: hashPassword(temp) });
   await store.create('ActivityEvent', { type: 'password_reset', target_id: target.id, by: 'admin' }, req.user);
@@ -749,6 +779,7 @@ const ADMIN_PROFILE_FIELDS = new Set(['full_name', 'headline', 'bio', 'home_city
 app.put('/api/users/:id', requireAdmin, async (req, res, next) => {
   const target = await users.byId(req.params.id);
   if (!target) return res.status(404).json({ error: 'Not found' });
+  if (protectedMaster(target, req.user)) return res.status(403).json({ error: MASTER_LOCKED });
   const patch = Object.fromEntries(Object.entries(req.body || {}).filter(([k]) => ADMIN_PROFILE_FIELDS.has(k)));
   if (target.id === req.user.id && patch.disabled) return res.status(400).json({ error: 'You cannot deactivate yourself.' });
   const updated = await users.update(target.id, patch);
@@ -764,13 +795,14 @@ app.put('/api/users/:id', requireAdmin, async (req, res, next) => {
 // alone, so those stay, and a listing they had claimed goes back to unclaimed.
 // The audit trail (ActivityEvent) is kept.
 const MEMBER_LINKS = ['created_by_id', 'recipient_id', 'requester_id', 'user_id'];
-const KEEP_ON_MEMBER_DELETE = new Set(['Provider', 'Company', 'Category', 'Setting', 'ActivityEvent']);
+const KEEP_ON_MEMBER_DELETE = new Set(['Provider', 'Company', 'Category', 'Setting', 'ActivityEvent', 'Announcement']);
 app.delete('/api/users/:id', requireAdmin, async (req, res, next) => {
   try {
     const target = await users.byId(req.params.id);
     if (!target) return res.status(404).json({ error: 'Not found' });
     if (target.id === req.user.id) return res.status(400).json({ error: 'You cannot delete your own account from here.' });
     if (target.email === GUEST_EMAIL) return res.status(400).json({ error: 'The guest account cannot be deleted.' });
+    if (protectedMaster(target, req.user)) return res.status(403).json({ error: MASTER_LOCKED });
     let removed = 0;
     for (const entity of ENTITIES) {
       if (KEEP_ON_MEMBER_DELETE.has(entity)) continue;
@@ -828,6 +860,7 @@ app.put('/api/users/:id/role', requireAdmin, async (req, res, next) => {
   const target = await users.byId(req.params.id);
   if (!target) return res.status(404).json({ error: 'Not found' });
   if (target.email === GUEST_EMAIL) return res.status(400).json({ error: 'The guest account cannot have a role.' });
+  if (protectedMaster(target, req.user)) return res.status(403).json({ error: MASTER_LOCKED });
   const updated = await users.update(target.id, { role });
   await store.create('ActivityEvent', { type: 'role_change', target_id: target.id, from: target.role, to: role }, req.user);
   res.json(userToPublic(updated));
@@ -917,7 +950,7 @@ app.put('/api/auth/me', requireAuth, async (req, res, next) => {
   // of KC_GUEST_READONLY.
   if (isGuest(req.user)) return res.status(403).json({ error: 'Create an account to have a profile of your own.', guest: true });
   // Role and verification are server-owned; a user cannot promote themselves.
-  const { role, verified, password_hash, email, id, ...safe } = req.body || {};
+  const { role, verified, password_hash, email, id, master_admin, ...safe } = req.body || {};
   // Free text a member can otherwise fill their profile with unbounded, one
   // entry per line of a chip input — capped and de-duplicated (case-insensitive,
   // first spelling wins) so the skills section cannot become a spam dumping

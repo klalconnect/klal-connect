@@ -7,6 +7,7 @@
 // read-time shaping of rows. Run with `npm test`.
 process.env.KC_DEMO_MODE = '1';
 process.env.KC_STORE = 'memory';
+process.env.KC_MASTER_ADMIN_EMAIL = 'demo@klal.app';
 process.env.KC_GUEST_READONLY = '1';
 process.env.KC_EMAIL_DELIVERY = 'dev';
 // Saving a listing looks up its pin; without a provider that is answered
@@ -744,6 +745,55 @@ ok(flipped.status === 201 && (await call('GET', '/config')).data.vouchesEnabled 
 ok((await vouchRows(null)).length === 1, 'turning it on brings the kept vouch back');
 const onVouch = await call('POST', '/functions/toggleCommunityActivity', { token: userA, body: { providerId: switchId, activity: 'vouch' } });
 ok(onVouch.status === 200 && onVouch.data?.active === true, 'vouching works again once on', String(onVouch.status));
+
+// ---- Klal Team announcements --------------------------------------------
+// Only an admin writes them. Everyone, signed out included, sees the pinned
+// ones that have not ended; unpinned and ended ones stay on the admin screen.
+const annMember = await call('POST', '/entities/Announcement', { token: userA, body: { title: 'Fake news', tabs: ['all'], pinned: true } });
+ok(annMember.status === 403, 'a member cannot post an announcement', String(annMember.status));
+const annLive = await call('POST', '/entities/Announcement', { token: admin, body: { title: 'Big news', body: 'A new feature', tabs: ['Home', 'Feed'], pinned: true } });
+const annEnded = await call('POST', '/entities/Announcement', { token: admin, body: { title: 'Old news', tabs: ['all'], pinned: true, ends_at: new Date(Date.now() - 60_000).toISOString() } });
+const annOff = await call('POST', '/entities/Announcement', { token: admin, body: { title: 'Taken down', tabs: ['all'], pinned: false } });
+ok(annLive.status === 201 && annEnded.status === 201 && annOff.status === 201, 'an admin posts announcements');
+const annTitles = async (token) => ((await call('GET', '/entities/Announcement', token ? { token } : {})).data || []).map((a) => a.title).sort().join(',');
+ok(await annTitles(null) === 'Big news' && await annTitles(userA) === 'Big news', 'visitors and members see only the live one', await annTitles(null));
+ok(await annTitles(admin) === 'Big news,Old news,Taken down', 'admins see all of them', await annTitles(admin));
+const annUnpin = await call('PUT', `/entities/Announcement/${annLive.data?.id}`, { token: admin, body: { pinned: false } });
+ok(annUnpin.status === 200 && await annTitles(null) === '', 'unpinning takes it off for everyone', await annTitles(null));
+
+// ---- the master admin ----------------------------------------------------
+// The owner's account (KC_MASTER_ADMIN_EMAIL here). No other admin can demote,
+// suspend, edit, reset or delete it, and it can still manage the other admins.
+const meOf = async (token) => (await call('GET', '/auth/me', { token })).data;
+const masterSelf = await meOf(admin);
+ok(masterSelf.master_admin === true, 'the owner account is the master admin from the start');
+const selfPromote = await call('PUT', '/auth/me', { token: userA, body: { master_admin: true } });
+ok(selfPromote.status === 200 && (await meOf(userA)).master_admin !== true, 'a member cannot make themselves master admin through their profile');
+const otherAdminId = (await meOf(userB)).id;
+ok((await call('PUT', `/users/${otherAdminId}/role`, { token: admin, body: { role: 'admin' } })).status === 200, 'the master admin makes another admin');
+const tries = [
+  ['PUT', `/users/${masterSelf.id}/role`, { role: 'user' }],
+  ['PUT', `/users/${masterSelf.id}`, { disabled: true }],
+  ['POST', `/users/${masterSelf.id}/reset-password`, undefined],
+  ['DELETE', `/users/${masterSelf.id}`, undefined],
+];
+for (const [method, path, body] of tries) {
+  const r = await call(method, path, { token: userB, body });
+  ok(r.status === 403, `another admin is refused: ${method} ${path.replace(masterSelf.id, 'master')}`, String(r.status));
+}
+ok((await meOf(admin)).role === 'admin', 'the master admin is still an admin');
+ok((await call('PUT', `/users/${otherAdminId}/role`, { token: admin, body: { role: 'user' } })).status === 200, 'the master admin can still remove another admin');
+const handNoWord = await call('POST', `/users/${otherAdminId}/hand-over-master`, { token: admin, body: {} });
+ok(handNoWord.status === 400, 'handing over needs CONFIRM typed', String(handNoWord.status));
+const handByOther = await call('POST', `/users/${masterSelf.id}/hand-over-master`, { token: userB, body: { confirm: 'CONFIRM' } });
+ok(handByOther.status === 403, 'only the master admin can hand it over', String(handByOther.status));
+const handed = await call('POST', `/users/${otherAdminId}/hand-over-master`, { token: admin, body: { confirm: 'CONFIRM' } });
+ok(handed.status === 200 && (await meOf(userB)).master_admin === true && (await meOf(userB)).role === 'admin', 'the master admin hands it over', String(handed.status));
+ok((await meOf(admin)).master_admin === false && (await meOf(admin)).role === 'admin', 'the old master stays an admin without the protection');
+ok((await call('PUT', `/users/${otherAdminId}/role`, { token: admin, body: { role: 'user' } })).status === 403, 'the old master cannot demote the new one');
+const handBack = await call('POST', `/users/${masterSelf.id}/hand-over-master`, { token: userB, body: { confirm: 'CONFIRM' } });
+ok(handBack.status === 200 && (await meOf(admin)).master_admin === true, 'the new master hands it back');
+ok((await call('PUT', `/users/${otherAdminId}/role`, { token: admin, body: { role: 'user' } })).status === 200 && (await meOf(userB)).master_admin === false, 'and is an ordinary member again once demoted');
 
 // ---- a listing that turns private takes its vouches with it --------------
 // The dangerous case is not a listing that was always sensitive — vouching on
