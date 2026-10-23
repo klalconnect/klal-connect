@@ -1095,9 +1095,9 @@ async function acceptInvite(invite, newUser) {
   if (invite.created_by_id && invite.created_by_id !== newUser.id) {
     await store.create('Notification', {
       recipient_id: invite.created_by_id, read: false, type: 'invite_joined',
-      actor_name: newUser.data?.full_name || newUser.email,
+      actor_id: newUser.id, actor_name: newUser.data?.full_name || '',
       target_type: 'user', target_id: newUser.id,
-      message: `${newUser.data?.full_name || 'Someone'} joined Klal from your invite`,
+      message: `${newUser.data?.full_name || 'Someone'} joined using your invite`,
     }, { id: newUser.id, email: newUser.email });
   }
 }

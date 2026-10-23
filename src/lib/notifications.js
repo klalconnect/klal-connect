@@ -36,6 +36,7 @@ export async function notify({ recipient_id, type, actor, target_type, target_id
 export function notificationPath(n){
   switch(n.target_type){
     case 'post': return '/feed';
+    case 'user': return n.target_id ? `/profile/${n.target_id}` : '/people';
     case 'connection': return n.actor_id ? `/profile/${n.actor_id}` : '/people';
     case 'message': return n.actor_id ? `/messages/${n.actor_id}` : '/messages';
     case 'provider': return n.target_id ? `/provider/${n.target_id}` : '/directory';
