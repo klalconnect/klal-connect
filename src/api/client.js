@@ -363,6 +363,8 @@ export const api = {
     setRole: (id, role) => request('PUT', `/users/${encodeURIComponent(id)}/role`, { body: { role } }),
     resetPassword: (id) => request('POST', `/users/${encodeURIComponent(id)}/reset-password`),
     updateUser: (id, patch) => request('PUT', `/users/${encodeURIComponent(id)}`, { body: patch }),
+    deleteUser: (id) => request('DELETE', `/users/${encodeURIComponent(id)}`),
+    deleteListing: (id) => request('DELETE', `/admin/listings/${encodeURIComponent(id)}`),
     health: () => request('GET', '/admin/health'),
   }, entities, auth, functions: functionsApi, integrations, geo, getConfig };
 export { ApiError };
