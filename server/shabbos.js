@@ -3,7 +3,7 @@
 // These times gate whether the app accepts writes, so they have to be right.
 // Zmanim, the Hebrew calendar, parsha and Israel-vs-diaspora yom tov lengths
 // all come from @hebcal/core rather than hand-rolled sunset math.
-import { HebrewCalendar, Location, CandleLightingEvent, HavdalahEvent, flags } from '@hebcal/core';
+import { HebrewCalendar, Location, Zmanim, CandleLightingEvent, HavdalahEvent, flags } from '@hebcal/core';
 import { store } from './db.js';
 
 const DAY = 86_400_000;
@@ -91,6 +91,44 @@ function candleOptions(value) {
   if (value === '' || value == null) return {};
   const n = Number(value);
   return Number.isFinite(n) && n > 0 ? { candleLightingMins: n } : {};
+}
+
+// The calendar date it is right now in a zone, and that date's weekday.
+function localDate(now, tzid) {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
+    timeZone: tzid, year: 'numeric', month: 'numeric', day: 'numeric', weekday: 'short',
+  }).formatToParts(new Date(now)).map((x) => [x.type, x.value]));
+  const dow = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(parts.weekday);
+  return { y: Number(parts.year), m: Number(parts.month), d: Number(parts.day), dow };
+}
+
+// Epoch ms of midnight starting a calendar date in a zone. Two passes, because
+// the zone's offset on that date is only known once we are near it.
+function midnightIn(y, m, d, tzid) {
+  let t = Date.UTC(y, m - 1, d);
+  for (let i = 0; i < 2; i++) {
+    const p = localDate(t, tzid);
+    const hm = new Intl.DateTimeFormat('en-GB', { timeZone: tzid, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(t)).split(':').map(Number);
+    const shown = Date.UTC(p.y, p.m - 1, p.d) + (hm[0] * 60 + hm[1]) * 60_000;
+    t += Date.UTC(y, m - 1, d) - shown;
+  }
+  return t;
+}
+
+// When the home page puts the Shabbos times at the top: from sunset on
+// Thursday until Friday ends, in the place the times are for. The window for
+// this week, or the coming week once Friday is over.
+export function homePinWindow(location, now = Date.now()) {
+  const tzid = location.getTzid();
+  const { y, m, d, dow } = localDate(now, tzid);
+  const toThursday = dow === 5 ? -1 : (4 - dow + 7) % 7;
+  const thu = new Date(Date.UTC(y, m - 1, d + toThursday));
+  const [ty, tm, td] = [thu.getUTCFullYear(), thu.getUTCMonth() + 1, thu.getUTCDate()];
+  const sunset = new Zmanim(location, new Date(ty, tm - 1, td), false).sunset();
+  return {
+    pinFrom: Number.isNaN(sunset?.getTime?.()) ? midnightIn(ty, tm, td + 1, tzid) : sunset.getTime(),
+    pinUntil: midnightIn(ty, tm, td + 2, tzid),
+  };
 }
 
 /**
@@ -217,6 +255,8 @@ export async function computeShabbosStatus(profile = {}, now = Date.now()) {
     // greet someone during it.
     windowKind,
     isInIsrael: location.getIsrael(),
+    // Thursday sunset to the end of Friday: the home page pins the times then.
+    ...homePinWindow(location, now),
   };
 }
 
