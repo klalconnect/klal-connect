@@ -29,11 +29,11 @@ import { ensureDemoData } from './demo-seed.js';
 import { ensureCoreCategories } from './ensure-core.js';
 import { reverseGeocode, searchPlaces, geolocateIp, pinForListing, tzFor, PROVIDER as GEO_PROVIDER } from './geocode.js';
 import { translateEnabled, LANGUAGES as TRANSLATE_LANGUAGES } from './translate.js';
-import { put as putFile, usingObjectStorage, UPLOAD_DIR } from './storage.js';
+import { put as putFile, usingObjectStorage, UPLOAD_DIR, photoStorageUsage } from './storage.js';
 import { mountSeo, sitemap, robots, siteOrigin } from './seo.js';
 import { healthReport } from './health.js';
 import { vouchesEnabled, videosSwitchOn, forgetSettings } from './settings.js';
-import { videoUploadLink, videoStorageReady, checkVideoStorage, VIDEO_MAX_MB, VIDEO_MAX_SECONDS } from './video.js';
+import { videoUploadLink, videoStorageReady, checkVideoStorage, videoStorageUsage, VIDEO_MAX_MB, VIDEO_MAX_SECONDS } from './video.js';
 
 // The built index.html, baked in at build time by scripts/emit-shell.mjs.
 // Absent in dev and in tests, where Vite serves the shell itself.
@@ -1308,6 +1308,26 @@ app.get('/robots.txt', (req, res) => {
   res.set('Content-Type', 'text/plain; charset=utf-8');
   res.set('Cache-Control', 'public, max-age=0, s-maxage=86400');
   res.send(robots(siteOrigin(req)));
+});
+
+// How full the photo and video stores are, against their free allowances,
+// for the weekly storage check. Totals only — no file names. Listing a store
+// is itself a metered operation, so the answer is kept for an hour.
+const FREE_PHOTO_GB = 1;
+const FREE_VIDEO_GB = 10;
+let storageCache = null;
+app.get('/api/health/storage', async (_req, res) => {
+  if (storageCache && Date.now() - storageCache.at < 60 * 60 * 1000) return res.json(storageCache.body);
+  const gb = (b) => Math.round((b / 1024 ** 3) * 1000) / 1000;
+  const read = async (fn, freeGb) => {
+    try {
+      const u = await fn();
+      return u && { files: u.count, gb: gb(u.bytes), free_gb: freeGb, percent_of_free: Math.round((u.bytes / (freeGb * 1024 ** 3)) * 1000) / 10 };
+    } catch (err) { return { error: String(err?.message || err).slice(0, 120) }; }
+  };
+  const body = { checked_at: new Date().toISOString(), photos: await read(photoStorageUsage, FREE_PHOTO_GB), videos: await read(videoStorageUsage, FREE_VIDEO_GB) };
+  storageCache = { at: Date.now(), body };
+  res.json(body);
 });
 
 app.get('/api/health', async (_req, res, next) => {
