@@ -22,6 +22,7 @@ import { listingEditor, normalizeListingPatch, canSetPaymentLink } from '../src/
 import { verificationAfterEdit, pinAfterEdit, hasCoordinate } from '../src/lib/trust.js';
 import { isValidTimeZone } from './shabbos.js';
 import { isScheduled, byPostedAtDesc, byFeedRank } from '../src/lib/scheduledPosts.js';
+import { isLiveAnnouncement } from '../src/lib/announcements.js';
 import { BOOKING_LABELS, DEFAULT_BOOKING_LABEL, withScheme } from '../src/lib/booking.js';
 import { WORK_STATUS_IDS } from '../src/lib/workStatus.js';
 import { isDemoMode } from './db.js';
@@ -131,7 +132,7 @@ app.use((req, res, next) => {
 
 // Which entities a signed-out visitor may read. The directory is public by
 // design; everything else (messages, notifications, reports…) is not.
-const PUBLIC_READ = new Set(['Provider', 'Company', 'Category', 'CommunityNote', 'Vouch', 'FeedPost', 'Comment', 'SkillEndorsement', 'Recommendation', 'Job']);
+const PUBLIC_READ = new Set(['Provider', 'Company', 'Category', 'CommunityNote', 'Vouch', 'FeedPost', 'Comment', 'SkillEndorsement', 'Recommendation', 'Job', 'Announcement']);
 
 // Entities that carry a moderation status. Everyone except an admin sees only
 // published rows — plus their own submissions, so an author can still find the
@@ -283,6 +284,9 @@ async function visibleRows(entity, rows, user) {
   // an admin's Saved page is their own list, not a register of everyone's.
   if (PERSONAL.has(entity)) return rows.filter((row) => !!user && row.created_by_id === user.id);
   if (user?.role === 'admin') return rows;
+  // A Klal Team announcement is public once pinned and until it ends. Drafts,
+  // unpinned and ended ones are the admins' alone (src/lib/announcements.js).
+  if (entity === 'Announcement') return rows.filter((row) => isLiveAnnouncement(row));
   if (isModerator(user) && MODERATED_BY_STAFF.has(entity)) return rows;
 
   // A vouch names the member who gave it and a community note is signed, so on
@@ -383,7 +387,7 @@ const ENTITIES = new Set([
   'ActivityEvent', 'FeedPost', 'FeedLike', 'Message', 'Notification', 'Setting',
   'SavedProvider', 'ProviderUsage', 'ClaimRequest', 'ListingChangeRequest',
   'ListingReport', 'PrivateReport', 'Vouch', 'CommentVote', 'Invite', 'SavedPost',
-  'SkillEndorsement', 'Recommendation', 'Job', 'JobApplication',
+  'SkillEndorsement', 'Recommendation', 'Job', 'JobApplication', 'Announcement',
 ]);
 
 app.param('entity', (req, res, next, entity) => {
@@ -764,7 +768,7 @@ app.put('/api/users/:id', requireAdmin, async (req, res, next) => {
 // alone, so those stay, and a listing they had claimed goes back to unclaimed.
 // The audit trail (ActivityEvent) is kept.
 const MEMBER_LINKS = ['created_by_id', 'recipient_id', 'requester_id', 'user_id'];
-const KEEP_ON_MEMBER_DELETE = new Set(['Provider', 'Company', 'Category', 'Setting', 'ActivityEvent']);
+const KEEP_ON_MEMBER_DELETE = new Set(['Provider', 'Company', 'Category', 'Setting', 'ActivityEvent', 'Announcement']);
 app.delete('/api/users/:id', requireAdmin, async (req, res, next) => {
   try {
     const target = await users.byId(req.params.id);

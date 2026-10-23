@@ -6,6 +6,7 @@ import ThemeToggle from '@/components/ThemeToggle';
 import NotificationBell from '@/components/NotificationBell';
 import ShabbosMode from '@/components/ShabbosMode';
 import TravelWarningBanner from '@/components/TravelWarningBanner';
+import AnnouncementBanner from '@/components/AnnouncementBanner';
 import { useDetectLocation } from '@/hooks/useDetectLocation';
 import AccountRequiredModal from '@/components/AccountRequiredModal';
 import ErrorBoundary from '@/components/ErrorBoundary';
@@ -102,7 +103,7 @@ export default function AppLayout() {
     {/* Suspense sits here, not around the router: a lazy route (admin, jobs)
         loading on a slow connection should swap the page, not unmount the
         header and the bottom nav down to a bare "Loading…". */}
-    <main><ErrorBoundary><Suspense fallback={<div className="loading">Loading…</div>}><Outlet/></Suspense></ErrorBoundary></main>
+    <main><ErrorBoundary><AnnouncementBanner/><Suspense fallback={<div className="loading">Loading…</div>}><Outlet/></Suspense></ErrorBoundary></main>
     <SiteFooter className="mt-10"/>
     <BackToTop/>
     {/* repeat(6,minmax(0,1fr)), not grid-cols-6: `1fr` is minmax(auto,1fr), so

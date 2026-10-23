@@ -745,6 +745,21 @@ ok((await vouchRows(null)).length === 1, 'turning it on brings the kept vouch ba
 const onVouch = await call('POST', '/functions/toggleCommunityActivity', { token: userA, body: { providerId: switchId, activity: 'vouch' } });
 ok(onVouch.status === 200 && onVouch.data?.active === true, 'vouching works again once on', String(onVouch.status));
 
+// ---- Klal Team announcements --------------------------------------------
+// Only an admin writes them. Everyone, signed out included, sees the pinned
+// ones that have not ended; unpinned and ended ones stay on the admin screen.
+const annMember = await call('POST', '/entities/Announcement', { token: userA, body: { title: 'Fake news', tabs: ['all'], pinned: true } });
+ok(annMember.status === 403, 'a member cannot post an announcement', String(annMember.status));
+const annLive = await call('POST', '/entities/Announcement', { token: admin, body: { title: 'Big news', body: 'A new feature', tabs: ['Home', 'Feed'], pinned: true } });
+const annEnded = await call('POST', '/entities/Announcement', { token: admin, body: { title: 'Old news', tabs: ['all'], pinned: true, ends_at: new Date(Date.now() - 60_000).toISOString() } });
+const annOff = await call('POST', '/entities/Announcement', { token: admin, body: { title: 'Taken down', tabs: ['all'], pinned: false } });
+ok(annLive.status === 201 && annEnded.status === 201 && annOff.status === 201, 'an admin posts announcements');
+const annTitles = async (token) => ((await call('GET', '/entities/Announcement', token ? { token } : {})).data || []).map((a) => a.title).sort().join(',');
+ok(await annTitles(null) === 'Big news' && await annTitles(userA) === 'Big news', 'visitors and members see only the live one', await annTitles(null));
+ok(await annTitles(admin) === 'Big news,Old news,Taken down', 'admins see all of them', await annTitles(admin));
+const annUnpin = await call('PUT', `/entities/Announcement/${annLive.data?.id}`, { token: admin, body: { pinned: false } });
+ok(annUnpin.status === 200 && await annTitles(null) === '', 'unpinning takes it off for everyone', await annTitles(null));
+
 // ---- a listing that turns private takes its vouches with it --------------
 // The dangerous case is not a listing that was always sensitive — vouching on
 // one of those is already refused. It is a listing that becomes sensitive
