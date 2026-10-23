@@ -10,7 +10,7 @@
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { put as putBlob } from '@vercel/blob';
+import { put as putBlob, list as listBlobs } from '@vercel/blob';
 import { newId } from './db.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -114,6 +114,22 @@ export function put(buffer, mimetype) {
   if (SUPABASE_URL && SUPABASE_KEY) return putSupabase(buffer, mimetype);
   if (BLOB_TOKEN) return putVercelBlob(buffer, mimetype);
   return putLocal(buffer, mimetype);
+}
+
+/**
+ * How much of the photo store is in use, for the weekly check against the
+ * Blob free allowance. Only the Blob backend can say; elsewhere null.
+ */
+export async function photoStorageUsage() {
+  if (!BLOB_TOKEN || (SUPABASE_URL && SUPABASE_KEY)) return null;
+  let count = 0, bytes = 0, cursor;
+  for (let page = 0; page < 50; page++) {
+    const r = await listBlobs({ token: BLOB_TOKEN, prefix: 'uploads/', limit: 1000, cursor });
+    for (const b of r.blobs) { count++; bytes += b.size || 0; }
+    if (!r.hasMore) break;
+    cursor = r.cursor;
+  }
+  return { count, bytes };
 }
 
 export { UPLOAD_DIR };

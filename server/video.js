@@ -52,7 +52,7 @@ const enc = (s) => encodeURIComponent(s).replace(/[!'()*]/g, (c) => `%${c.charCo
  * Exported with its inputs explicit so it can be checked against AWS's own
  * published example.
  */
-export function presign({ method, host, path, headers = {}, accessKey, secretKey, region, service = 's3', expires, now = new Date() }) {
+export function presign({ method, host, path, headers = {}, params = {}, accessKey, secretKey, region, service = 's3', expires, now = new Date() }) {
   const amzDate = now.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
   const day = amzDate.slice(0, 8);
   const scope = `${day}/${region}/${service}/aws4_request`;
@@ -60,6 +60,7 @@ export function presign({ method, host, path, headers = {}, accessKey, secretKey
   const names = Object.keys(allHeaders).sort();
   const signedHeaders = names.join(';');
   const query = {
+    ...params,
     'X-Amz-Algorithm': 'AWS4-HMAC-SHA256',
     'X-Amz-Credential': `${accessKey}/${scope}`,
     'X-Amz-Date': amzDate,
@@ -83,8 +84,8 @@ export function presign({ method, host, path, headers = {}, accessKey, secretKey
 }
 
 const r2Host = () => `${ACCOUNT_ID}.r2.cloudflarestorage.com`;
-const r2Url = (method, key, headers, expires) =>
-  presign({ method, host: r2Host(), path: `/${BUCKET}/${key}`, headers, accessKey: ACCESS_KEY, secretKey: SECRET_KEY, region: 'auto', expires });
+const r2Url = (method, key, headers, expires, params) =>
+  presign({ method, host: r2Host(), path: key ? `/${BUCKET}/${key}` : `/${BUCKET}`, headers, params, accessKey: ACCESS_KEY, secretKey: SECRET_KEY, region: 'auto', expires });
 
 function fail(message, statusCode = 400) {
   const e = new Error(message);
@@ -202,4 +203,24 @@ export async function checkVideoStorage() {
     ? 'Uploading and playing both work. If a phone still cannot upload, the upload permission rule (CORS) is the thing to check.'
     : `Uploading works, but the video could not be opened at the public address (${view.status || view.code}). Check R2_PUBLIC_URL in Vercel and that the bucket's Public Development URL is on.`;
   return result;
+}
+
+/**
+ * How much video storage is in use, for the weekly check against R2's free
+ * 10 GB. Listing the bucket is a paid-per-million operation, so callers cache
+ * it (see /api/health/storage).
+ */
+export async function videoStorageUsage() {
+  if (!videoStorageReady()) return null;
+  let count = 0, bytes = 0, token = '';
+  for (let page = 0; page < 50; page++) {
+    const params = { 'list-type': '2', prefix: 'videos/', ...(token ? { 'continuation-token': token } : {}) };
+    const res = await fetch(r2Url('GET', '', {}, 60, params));
+    const xml = await res.text();
+    if (!res.ok) throw new Error(`R2 list ${res.status} ${/<Code>([^<]+)/.exec(xml)?.[1] || ''}`);
+    for (const m of xml.matchAll(/<Size>(\d+)<\/Size>/g)) { count++; bytes += Number(m[1]); }
+    token = /<NextContinuationToken>([^<]+)</.exec(xml)?.[1] || '';
+    if (!token) break;
+  }
+  return { count, bytes };
 }
