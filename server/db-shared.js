@@ -16,6 +16,16 @@ export function stableId(...parts) {
   return createHash('sha256').update(parts.join(':')).digest('hex').slice(0, 24);
 }
 
+// The master admin: the site owner's own account, named here by its login
+// email so it is theirs from the first deploy and no other admin can claim
+// it first. KC_MASTER_ADMIN_EMAIL (comma-separated) overrides the list. The
+// account always reads as an admin, and app.js refuses any other admin who
+// tries to demote, suspend, edit, reset or delete it.
+const OWNER_EMAILS = ['eliepstein111@gmail.com'];
+const masterEmails = () => (process.env.KC_MASTER_ADMIN_EMAIL ? process.env.KC_MASTER_ADMIN_EMAIL.split(',') : OWNER_EMAILS)
+  .map((e) => e.trim().toLowerCase()).filter(Boolean);
+export const isMasterEmail = (email) => !!email && masterEmails().includes(String(email).trim().toLowerCase());
+
 // The app reads users as plain objects; password_hash must never be among them.
 export function userToPublic(row) {
   if (!row) return null;
@@ -23,7 +33,8 @@ export function userToPublic(row) {
     ...(row.data || {}),
     id: row.id,
     email: row.email,
-    role: row.role,
+    role: isMasterEmail(row.email) ? 'admin' : row.role,
+    master_admin: isMasterEmail(row.email),
     verified: !!row.verified,
     created_date: row.created_date instanceof Date ? row.created_date.toISOString() : row.created_date,
     updated_date: row.updated_date instanceof Date ? row.updated_date.toISOString() : row.updated_date,

@@ -7,6 +7,7 @@
 // read-time shaping of rows. Run with `npm test`.
 process.env.KC_DEMO_MODE = '1';
 process.env.KC_STORE = 'memory';
+process.env.KC_MASTER_ADMIN_EMAIL = 'demo@klal.app';
 process.env.KC_GUEST_READONLY = '1';
 process.env.KC_EMAIL_DELIVERY = 'dev';
 // Saving a listing looks up its pin; without a provider that is answered
@@ -761,15 +762,11 @@ const annUnpin = await call('PUT', `/entities/Announcement/${annLive.data?.id}`,
 ok(annUnpin.status === 200 && await annTitles(null) === '', 'unpinning takes it off for everyone', await annTitles(null));
 
 // ---- the master admin ----------------------------------------------------
-// One admin claims it; after that no other admin can demote, suspend, edit,
-// reset or delete them, and they can still manage the other admins.
+// The owner's account (KC_MASTER_ADMIN_EMAIL here). No other admin can demote,
+// suspend, edit, reset or delete it, and it can still manage the other admins.
 const meOf = async (token) => (await call('GET', '/auth/me', { token })).data;
 const masterSelf = await meOf(admin);
-const masterByMember = await call('POST', '/users/me/master-admin', { token: userA });
-ok(masterByMember.status === 403, 'a member cannot claim master admin', String(masterByMember.status));
-const claimed = await call('POST', '/users/me/master-admin', { token: admin });
-ok(claimed.status === 200 && claimed.data?.master_admin === true, 'an admin claims master admin', String(claimed.status));
-ok((await call('POST', '/users/me/master-admin', { token: admin })).status === 409, 'there is only ever one master admin');
+ok(masterSelf.master_admin === true, 'the owner account is the master admin from the start');
 const selfPromote = await call('PUT', '/auth/me', { token: userA, body: { master_admin: true } });
 ok(selfPromote.status === 200 && (await meOf(userA)).master_admin !== true, 'a member cannot make themselves master admin through their profile');
 const otherAdminId = (await meOf(userB)).id;

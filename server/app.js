@@ -734,24 +734,11 @@ app.get('/api/users', requireAuth, async (req, res, next) => {
   res.json(req.query.limit ? list.slice(0, Number(req.query.limit)) : list);
 });
 
-// The master admin is the site owner. One account at most, set once by an
-// admin pressing "Make me the master admin" while there is none, and stored
-// on the user row (server-owned, see PUT /api/auth/me). No other admin can
-// change its role, suspend, edit, reset or delete it; the master admin can
-// still do all of that to every other admin.
-const isMasterAdmin = (u) => u?.master_admin === true;
-const protectedMaster = (target, actor) => isMasterAdmin(userToPublic(target)) && target.id !== actor?.id;
+// The master admin is the site owner's account (isMasterEmail in
+// db-shared.js). No other admin can change its role, suspend, edit, reset or
+// delete it; the master admin can still do all of that to every other admin.
+const protectedMaster = (target, actor) => userToPublic(target).master_admin === true && target.id !== actor?.id;
 const MASTER_LOCKED = 'This is the master admin account. Only its owner can change it.';
-app.post('/api/users/me/master-admin', requireAdmin, async (req, res, next) => {
-  try {
-    const all = (await users.all()).map(userToPublic);
-    const current = all.find(isMasterAdmin);
-    if (current) return res.status(409).json({ error: current.id === req.user.id ? 'You are already the master admin.' : 'There is already a master admin.' });
-    const updated = await users.update(req.user.id, { master_admin: true });
-    await store.create('ActivityEvent', { type: 'master_admin_set', target_id: req.user.id }, req.user);
-    res.json(userToPublic(updated));
-  } catch (err) { next(err); }
-});
 
 // Admin only: hand a locked-out member a temporary password. Shown once to
 // the admin, never stored in the clear, and every use is audited. This is
