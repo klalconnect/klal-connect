@@ -47,3 +47,32 @@ export async function fixListingRepeats({ budgetMs = BUDGET_MS } = {}) {
   if (fixed) console.log(`[listings] removed repeated words from ${fixed} listings`);
   return fixed;
 }
+
+// Two listing names that came in garbled (approved by Eli, 2026-10-23). The
+// name is also written into each one's About text, so it is replaced there
+// too, but not in the source link at the end of the Austin one. A name that
+// has been changed since is left alone.
+const NAMES_KEY = 'listing_garbled_names_fixed_2026_10_23';
+export const NAME_FIXES = [
+  // GoDaven, Spring Valley: the Premishlan minyan, its name typed twice.
+  { id: '73cc2121621640708965b770', from: 'Prmeshlan Prmeshlan', to: 'Premishlan Minyan' },
+  // Mikvah.org, Austin: the Chabad Austin women's mikvah.
+  { id: 'a44e604de30c4c37a7229ca4', from: 'Mikva Tahara Austin Womens Mikvah Mikvah Rela', to: 'Mikvah Tahara Austin' },
+];
+
+export async function fixGarbledNames() {
+  if ((await store.filter('Setting', { key: NAMES_KEY })).length) return 0;
+  let fixed = 0;
+  for (const { id, from, to } of NAME_FIXES) {
+    const p = await store.get('Provider', id).catch(() => null);
+    if (!p || p.name !== from) continue;
+    const description = typeof p.description === 'string'
+      ? p.description.split('\n').map((line) => (/^(Source|Google Maps):/.test(line) ? line : line.split(from).join(to))).join('\n')
+      : p.description;
+    await store.update('Provider', id, { name: to, description });
+    fixed += 1;
+  }
+  await store.create('Setting', { key: NAMES_KEY, value: String(fixed) });
+  if (fixed) console.log(`[listings] fixed ${fixed} garbled listing names`);
+  return fixed;
+}
