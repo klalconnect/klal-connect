@@ -1,7 +1,7 @@
 import React, { useEffect, useId, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '@/api/client';
-import { List, Map as MapIcon, SlidersHorizontal, MessageCircle, Plus, MapPin, Globe, ChevronDown, X, LocateFixed } from 'lucide-react';
+import { List, Map as MapIcon, SlidersHorizontal, MessageCircle, Plus, MapPin, Globe, ChevronDown, LocateFixed } from 'lucide-react';
 import ResourceCard from '@/components/ResourceCard';
 import DirectoryMap from '@/components/DirectoryMap';
 import { EVERYWHERE, placeCounter, searchDirectory, startingCountry, suggestKeywords, suggestPlaces } from '@/lib/search';
@@ -323,7 +323,7 @@ export default function Browse() {
         <input type="checkbox" checked={verified} onChange={(e) => setVerified(e.target.checked)} /> Verified only
       </label>
       {/* Last of the filters, and filled teal so it reads as the one action in a stack of boxes. */}
-      <button type="button" onClick={clearFilters} className="clear-filters md:order-2 md:col-span-2"><X size={16} />Clear</button>
+      <button type="button" onClick={clearFilters} className="clear-filters md:order-2 md:col-span-2">Clear</button>
     </div>
 
     {locationOff && <p role="status" className="-mt-3 mb-4 flex items-center gap-1.5 rounded-lg bg-brand-gold-bg/60 px-3 py-2 text-sm font-medium text-brand-gold-ink"><MapPin size={14} className="shrink-0" />Location is off, type your city instead.</p>}
