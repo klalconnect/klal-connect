@@ -20,6 +20,7 @@ import { nearbyListings } from '@/lib/nearby';
 import useNearHere from '@/hooks/useNearHere';
 import { useUserLocation } from '@/lib/userLocation';
 import NearYouPrompt from '@/components/NearYouPrompt';
+import { LoadingCards } from '@/components/Loading';
 
 // The words people actually use, as searches rather than category filters —
 // "Plumbers" is not a category, and the alias layer in @/lib/searchTerms is
@@ -40,11 +41,11 @@ const LAUNCH_COMMUNITY = 'Boca Raton';
 
 export default function Home() {
   const vouchesOn = useVouchesEnabled();
-  const { data: providers = [] } = useQuery({
+  const { data: providers = [], isLoading: loadingListings } = useQuery({
     queryKey: ['providers', 'all'],
     queryFn: () => api.entities.Provider.filter({ status: 'published' }),
   });
-  const { data: categories = [] } = useQuery({
+  const { data: categories = [], isLoading: loadingCategories } = useQuery({
     queryKey: ['categories'],
     queryFn: () => api.entities.Category.list('order'),
   });
@@ -135,7 +136,7 @@ export default function Home() {
         {quickLinks.map(({ label, q, count }) => <Link
           key={q}
           to={`/browse?q=${encodeURIComponent(q)}${community ? `&location=${encodeURIComponent(community)}` : ''}`}
-          className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold transition ${count > 0 ? 'bg-brand-tint text-brand-teal hover:ring-1 hover:ring-brand-teal' : 'text-brand-muted ring-1 ring-brand-line hover:text-brand-ink'}`}
+          className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold transition ${count > 0 || loadingListings ? 'bg-brand-tint text-brand-teal hover:ring-1 hover:ring-brand-teal' : 'text-brand-muted ring-1 ring-brand-line hover:text-brand-ink'}`}
         >{label}</Link>)}
       </div>
       <AddListingPrompt />
@@ -155,14 +156,16 @@ export default function Home() {
       </div>
     </section>}
 
-    <LocalSection providers={providers} community={community} showTimes={!timesOnTop} />
+    <LocalSection providers={providers} loading={loadingListings} community={community} showTimes={!timesOnTop} />
 
     <section>
       <div className="section-head">
         <div><span className="eyebrow">BROWSE</span><h2 className="title">Categories{community ? ` in ${community}` : ''}</h2></div>
         {categories.length > tiles.length && <Link to="/directory" className="text-sm font-semibold text-brand-teal">All {categories.length} categories</Link>}
       </div>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+      {/* Until the listings arrive every tile would count zero and ask for
+          "Add the first", so stand-in tiles shimmer instead. */}
+      {loadingListings || loadingCategories ? <LoadingCards kind="tile" count={8} label={null} /> : <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
         {tiles.map((c) => {
           const Icon = iconFor(c.icon && c.icon !== 'MoreHorizontal' ? c.icon : guessIcon(c.name));
           const empty = c.count === 0;
@@ -176,7 +179,7 @@ export default function Home() {
             {empty && <span className="mt-1 block text-xs text-brand-muted">Add the first</span>}
           </Link>;
         })}
-      </div>
+      </div>}
     </section>
 
     {/* The mission, and how the place works — below the useful part, not
@@ -217,7 +220,7 @@ function FeedPreview() {
       <div><span className="eyebrow">KLAL FEED</span><h2 className="title">Trending now</h2></div>
       <Link to="/feed" className="text-sm font-semibold text-brand-teal">See the feed</Link>
     </div>
-    {isLoading && <div className="loading">Loading feed…</div>}
+    {isLoading && <LoadingCards kind="post" count={3} label="Loading the latest posts…" />}
     {!isLoading && posts.length === 0 && <div className="empty"><p>Be the first to post to the Klal feed.</p><Link to="/feed" className="primary"><PenSquare size={16} />Write a post</Link></div>}
     <div className="space-y-3">
       {posts.slice(0, 3).map((p) => {
@@ -280,13 +283,20 @@ function ShabbosTimesBar({ className = '' }) {
   </div>;
 }
 
-function LocalSection({ providers, community, showTimes = true }) {
+function LocalSection({ providers, loading, community, showTimes = true }) {
   const { origin, where, ask } = useNearHere(providers, community);
   const near = useMemo(() => nearbyListings(providers, origin, { rank: byUse }), [providers, origin]);
   const shown = near.slice(0, 4);
   const timesBar = showTimes && <ShabbosTimesBar className="mb-4" />;
 
   if (!origin) return <div>{timesBar}<NearYouPrompt ask={ask} title="Help near you">Or pick a community above.</NearYouPrompt></div>;
+  // Still loading: shimmer where the nearby cards will land, rather than
+  // leaving a gap that then jumps open.
+  if (loading) return <section>
+    <div className="section-head"><div><span className="eyebrow">NEAR YOU</span><h2 className="title">Help {where ? `near ${where}` : 'near you'}</h2></div></div>
+    {timesBar}
+    <LoadingCards count={2} label="Finding listings near you…" />
+  </section>;
   if (shown.length === 0) return timesBar || null;
 
   const browseHere = community ? `/browse?location=${encodeURIComponent(community)}`

@@ -4,6 +4,7 @@ import { Bell } from 'lucide-react';
 import { api } from '@/api/client';
 import { useNotifications } from '@/hooks/useNotifications';
 import NotificationList from '@/components/NotificationList';
+import { LoadingNote } from '@/components/Loading';
 
 export default function NotificationBell(){
   const [open,setOpen]=useState(false);
@@ -50,7 +51,7 @@ export default function NotificationBell(){
         <span className="text-sm font-bold text-brand-ink">Notifications</span>
         {unread>0&&<button onClick={markAll} className="text-xs font-semibold text-brand-teal hover:underline">Mark all read</button>}
       </div>
-      {loading?<p className="px-4 py-8 text-center text-sm text-brand-muted">Loading…</p>:<NotificationList items={items} onNavigate={()=>setOpen(false)}/>}
+      {loading?<LoadingNote label="Loading…" className="justify-center px-4 py-8"/>:<NotificationList items={items} onNavigate={()=>setOpen(false)}/>}
     </div>,document.body)}
   </div>;
 }

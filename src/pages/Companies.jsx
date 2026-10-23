@@ -7,6 +7,7 @@ import { Image } from '@/components/ui/image';
 import { Building2, Search, Plus } from 'lucide-react';
 import { companyPath } from '@/lib/paths';
 import Headline from '@/components/Headline';
+import { LoadingCards } from '@/components/Loading';
 
 export default function Companies(){
   const [companies,setCompanies]=useState([]);
@@ -52,7 +53,7 @@ export default function Companies(){
       <Search size={16} className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-brand-muted"/>
       <SuggestInput className="field pl-9" placeholder="Search companies" aria-label="Search companies" value={q} onChange={setQ} onPick={pick} suggest={suggest}/>
     </div>
-    {loading ? <p className="text-sm text-brand-body">Loading…</p> : filtered.length===0
+    {loading ? <LoadingCards kind="person" count={3} label="Loading company pages…"/> : filtered.length===0
       ? <div className="empty"><Building2/><p>No company pages {q?`match "${q}"`:'yet'}. Be the first to create one.</p></div>
       : <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{filtered.map(c=>{
         const initials=(c.name||'?').split(' ').map(x=>x[0]).slice(0,2).join('').toUpperCase();

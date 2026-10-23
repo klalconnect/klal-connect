@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { api } from '@/api/client';
 import { List, Map as MapIcon, SlidersHorizontal, MessageCircle, Plus, MapPin, Globe, ChevronDown, LocateFixed, X } from 'lucide-react';
 import ResourceCard from '@/components/ResourceCard';
+import { LoadingCards, Spinner } from '@/components/Loading';
 import DirectoryMap from '@/components/DirectoryMap';
 import { EVERYWHERE, placeCounter, searchDirectory, startingCountry, suggestKeywords, suggestPlaces } from '@/lib/search';
 import SuggestInput from '@/components/SuggestInput';
@@ -26,6 +27,8 @@ const newSearchId = () => `s${Date.now().toString(36)}${Math.random().toString(3
 export default function Browse() {
   const params = new URLSearchParams(location.search);
   const [providers, setProviders] = useState([]);
+  // Until the listings arrive nothing below may say "0 found" or "no listings".
+  const [loaded, setLoaded] = useState(false);
   const [categories, setCategories] = useState([]);
   const [q, setQ] = useState(params.get('q') || '');
   // Only the place this link names. A place typed here belongs to this
@@ -112,7 +115,8 @@ export default function Browse() {
   useEffect(() => {
     Promise.all([api.entities.Provider.filter({ status: 'published' }), api.entities.Category.list('order')])
       .then(([p, c]) => { setProviders(p); setCategories(c); })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setLoaded(true));
   }, []);
 
   const choosePlace = (value) => setPlace(value);
@@ -389,7 +393,9 @@ export default function Browse() {
           above the clearly-labelled listings from other communities is the
           same confusion the padded count used to cause. */}
       <span className="order-1 min-w-0 flex-1 text-sm font-medium md:basis-full">
-        {results.length > 0
+        {!loaded
+          ? <span className="inline-flex items-center gap-2 text-brand-body"><Spinner />Finding listings…</span>
+          : results.length > 0
           ? <>{results.length} {results.length === 1 ? 'resource' : 'resources'} found {whereText ? `in ${whereText}` : 'everywhere'}</>
           : isSearch
             ? <>No matches{whereText ? <> in {whereText}</> : null}{elsewhere.length > 0 ? ` · ${elsewhere.length} elsewhere` : ''}</>
@@ -430,6 +436,8 @@ export default function Browse() {
       // reason it is in Feed: a grid item's default min-width is auto, so the
       // column grew to fit the widest listing card and pushed the page sideways.
       : <div className="grid grid-cols-[minmax(0,1fr)] gap-4 lg:grid-cols-[repeat(2,minmax(0,1fr))]">{results.map((p) => <ResourceCard key={p.id} provider={p} distance={p.shownDistance} />)}</div>)}
+
+    {!loaded && <LoadingCards count={6} label={null} />}
 
     {/* Nothing matched. Say so plainly, then give three ways forward: where it
         does exist, asking the community, and adding it. */}
@@ -486,7 +494,7 @@ export default function Browse() {
       {showWide && <div className="grid grid-cols-[minmax(0,1fr)] gap-4 border-t border-brand-line p-4 lg:grid-cols-[repeat(2,minmax(0,1fr))]">{wide.map((p) => <ResourceCard key={p.id} provider={p} distance={p.shownDistance} />)}</div>}
     </section>}
 
-    {providers.length === 0 && <div className="empty">
+    {loaded && providers.length === 0 && <div className="empty">
       <SlidersHorizontal />
       <p>The directory is just getting started — no listings have been added yet.</p>
       <Link to="/add" className="primary">Add the first listing</Link>

@@ -5,6 +5,7 @@ import { Image } from '@/components/ui/image';
 import { Plus } from 'lucide-react';
 import { companyPath } from '@/lib/paths';
 import HeadlineEdit from '@/components/HeadlineEdit';
+import { LoadingNote } from '@/components/Loading';
 
 export default function ManageCompanies({ user }){
   const [companies,setCompanies]=useState([]);
@@ -36,7 +37,7 @@ export default function ManageCompanies({ user }){
       </div>
       <Link to="/create-company" className="primary"><Plus size={16}/>New page</Link>
     </div>
-    {loading ? <p className="text-sm text-brand-body">Loading…</p> : companies.length===0
+    {loading ? <LoadingNote label="Loading your company pages…"/> : companies.length===0
       ? <p className="text-sm text-brand-muted">You haven't created any company pages yet.</p>
       : <div className="space-y-4">{companies.map(c=>{
         const initials=(c.name||'?').split(' ').map(x=>x[0]).slice(0,2).join('').toUpperCase();

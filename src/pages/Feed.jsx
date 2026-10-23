@@ -6,6 +6,7 @@ import FeedPostItem from '@/components/feed/FeedPostItem';
 import FeedPromotedPanel from '@/components/feed/FeedPromotedPanel';
 import FeedPeoplePanel from '@/components/feed/FeedPeoplePanel';
 import { FEED_FILTERS, matchesFilter } from '@/lib/postTypes';
+import { LoadingCards, LoadingNote } from '@/components/Loading';
 
 const PAGE=50;
 
@@ -56,11 +57,11 @@ export default function Feed(){
         {postId
           ?<div className="flex flex-wrap items-center justify-between gap-2 text-sm"><span className="text-brand-muted">Showing one post</span><Link to="/feed" className="font-semibold text-brand-teal hover:underline">Show all posts</Link></div>
           :<div className="-mx-1 flex gap-1.5 overflow-x-auto px-1 py-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:overflow-visible">{FEED_FILTERS.map(f=><button key={f.id} type="button" onClick={()=>setFilter(f.id)} className={`shrink-0 rounded-full px-3 py-1 text-xs font-semibold transition ${filter===f.id?'bg-brand-navy text-white':'bg-brand-surface text-brand-body ring-1 ring-brand-line hover:text-brand-ink'}`}>{f.label}</button>)}</div>}
-        {loading&&<div className="loading">Loading feed…</div>}
+        {loading&&<LoadingCards kind="post" count={3} label="Loading the feed…"/>}
         {!loading&&posts?.length===0&&<div className="empty"><p>{postId?'That post is no longer available.':'Be the first to post to the Klal feed.'}</p>{postId&&<Link to="/feed" className="text-sm font-semibold text-brand-teal hover:underline">Show all posts</Link>}</div>}
         {!loading&&posts?.length>0&&visible?.length===0&&<div className="empty"><p>{filter==='unanswered'?'Every ask has an answer. Nice work, klal.':'Nothing here yet — try another filter.'}</p></div>}
         {visible?.map(p=><FeedPostItem key={p.id} post={p} user={user} onDeleted={removed} onReposted={()=>{if(postId)setParams({});load();}}/>)}
-        {more&&<div ref={end} className="loading">Loading more posts…</div>}
+        {more&&<div ref={end}><LoadingNote label="Loading more posts…" className="justify-center py-6"/></div>}
       </div>
       <aside className="hidden space-y-5 lg:block">
         <FeedPromotedPanel/>
