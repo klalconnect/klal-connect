@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/api/client';
 import useVouchesEnabled from '@/hooks/useVouchesEnabled';
-import { MapPin, Plus, ArrowRight, MessageCircle, ShieldCheck, Flame, Moon, Newspaper, PenSquare, Users } from 'lucide-react';
+import { MapPin, Plus, ArrowRight, MessageCircle, ShieldCheck, Flame, Moon, Newspaper, PenSquare, Users, LogIn } from 'lucide-react';
 import SearchPanel from '@/components/SearchPanel';
 import AddListingPrompt from '@/components/AddListingPrompt';
 import ResourceCard from '@/components/ResourceCard';
@@ -95,12 +95,12 @@ export default function Home() {
     .sort((a, b) => b.count - a.count || (a.order ?? 99) - (b.order ?? 99))
     .slice(0, 8), [categories, local]);
 
-  const friday = new Date().getDay() === 5;
+  const timesOnTop = useShabbosAtTop();
 
   return <div className="page-shell space-y-14 py-8 md:space-y-16 md:py-12">
-    {/* On Friday, the visitor's own Friday, the times and parsha are what
-        people come for, so the strip moves up from Near you to the very top. */}
-    {friday && <ShabbosTimesBar className="-mb-8 md:-mb-10" />}
+    {/* From Thursday's sunset until Friday ends, the times and parsha are
+        what people come for, so the strip moves up from Near you to the top. */}
+    {timesOnTop && <ShabbosTimesBar className="-mb-8 md:-mb-10" />}
     {/* The feed leads: Klal Connect is first a place where the frum business
         world talks to itself. The directory follows, as what you get once
         you're here. */}
@@ -112,7 +112,10 @@ export default function Home() {
         <Link to="/feed" className="primary"><Newspaper size={16} />Open the feed</Link>
         {me
           ? <Link to="/feed" className="secondary"><PenSquare size={16} />Write a post</Link>
-          : <Link to="/register" className="secondary"><Users size={16} />Join free</Link>}
+          : <>
+            <Link to="/register" className="secondary"><Users size={16} />Join free</Link>
+            <Link to="/login" className="secondary"><LogIn size={16} />Log in</Link>
+          </>}
       </div>
     </section>
 
@@ -152,7 +155,7 @@ export default function Home() {
       </div>
     </section>}
 
-    <LocalSection providers={providers} community={community} showTimes={!friday} />
+    <LocalSection providers={providers} community={community} showTimes={!timesOnTop} />
 
     <section>
       <div className="section-head">
@@ -252,6 +255,16 @@ function FeedPreview() {
 // nothing that close the section is left out rather than filled with the
 // Bahamas; with no idea where the person is, it offers to find out.
 const byUse = (a, b) => (b.usage_count || 0) - (a.usage_count || 0) || String(b.created_date || '').localeCompare(String(a.created_date || ''));
+
+// Thursday's sunset to the end of Friday, where the times are for (the server
+// works the window out with the zmanim). A status saved before it sent the
+// window falls back to the device's own Friday.
+function useShabbosAtTop() {
+  const { status } = useShabbosStatus();
+  const now = Date.now();
+  if (status?.pinFrom && status?.pinUntil) return now >= status.pinFrom && now < status.pinUntil;
+  return new Date(now).getDay() === 5;
+}
 
 // City, candle lighting, Havdalah and the parsha in one strip. Nothing when
 // there is no place to work from yet.
