@@ -5,7 +5,8 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '@/api/client';
 import SuggestInput from '@/components/SuggestInput';
 import CountrySelect from '@/components/CountrySelect';
-import { placeCounter, suggestKeywords, suggestPlaces } from '@/lib/search';
+import { EVERYWHERE, placeCounter, startingCountry, suggestKeywords, suggestPlaces } from '@/lib/search';
+import { useUserLocation } from '@/lib/userLocation';
 import { lookupPlaces } from '@/lib/placeLookup';
 import { providerPath } from '@/lib/paths';
 
@@ -14,7 +15,9 @@ import { providerPath } from '@/lib/paths';
 export default function SearchPanel({ defaultLocation = '', autoFocus = false }) {
   const [query, setQuery] = useState('');
   const [location, setLocation] = useState(defaultLocation);
-  const [country, setCountry] = useState('');
+  // null until the person picks one ('' is Everywhere, picked); until then
+  // the box shows their own country (see startingCountry).
+  const [picked, setCountry] = useState(null);
   const [locating, setLocating] = useState(false);
   const [locationOff, setLocationOff] = useState(false);
   const whereId = useId();
@@ -35,12 +38,22 @@ export default function SearchPanel({ defaultLocation = '', autoFocus = false })
     queryKey: ['categories'],
     queryFn: () => api.entities.Category.list('order'),
   });
+  const me = useUserLocation();
+  const country = picked ?? startingCountry(providers, me.country, location);
+  // Where suggestions keep to the country in the box, shown or picked, and
+  // put places near the person first.
+  const near = me.lat != null && me.lng != null ? { lat: me.lat, lng: me.lng } : null;
 
   // Each place is counted with what is typed in the first box, so its number
   // is what the results page will say.
-  const countPlace = useMemo(() => placeCounter(providers, { q: query, country }), [providers, query, country]);
+  // A starting country does not narrow them: a New Yorker typing "Jer" should
+  // still be offered Jerusalem, and picking it opens on Everywhere.
+  const countPlace = useMemo(() => placeCounter(providers, { q: query, country: picked || '' }), [providers, query, picked]);
 
-  const go = (q, where, category = '') => navigate(`/browse?q=${encodeURIComponent(q)}&location=${encodeURIComponent(where)}${country ? `&country=${encodeURIComponent(country)}` : ''}${category ? `&category=${encodeURIComponent(category)}` : ''}`);
+  // Only a country they picked goes in the link: the results page works out
+  // the same starting country itself, and drops it for a place elsewhere.
+  const sentCountry = picked === '' ? EVERYWHERE : picked || '';
+  const go = (q, where, category = '') => navigate(`/browse?q=${encodeURIComponent(q)}&location=${encodeURIComponent(where)}${sentCountry ? `&country=${encodeURIComponent(sentCountry)}` : ''}${category ? `&category=${encodeURIComponent(category)}` : ''}`);
   // Picking a country empties a Where box filled in for you (your own
   // community), which would otherwise find nothing there. Something you typed stays.
   const chooseCountry = (value) => {
@@ -82,13 +95,13 @@ export default function SearchPanel({ defaultLocation = '', autoFocus = false })
       <Search className="text-brand-teal" />
       <SuggestInput wrapperClassName="w-full" value={query} onChange={setQuery} onPick={pickKeyword}
         suggest={(text) => suggestKeywords(text, providers, categories, location, country)}
-        autoFocus={autoFocus} className="w-full bg-transparent outline-none" placeholder="Plumber, therapist, gemach…" aria-label="What are you looking for?" />
+        autoFocus={autoFocus} className="w-full bg-transparent outline-none" placeholder="Shul, mikvah, restaurant…" aria-label="What are you looking for?" />
     </label>
     <label className="flex flex-1 items-center gap-3 border-b px-3 py-3 md:border-b-0 md:border-r">
       <MapPin className="text-brand-teal" />
       <SuggestInput id={whereId} wrapperClassName="w-full" value={location} onChange={(v) => { typed.current = true; setLocation(v); setLocationOff(false); }}
         onPick={(item) => { typed.current = true; setLocation(item.value); }}
-        suggest={(text) => suggestPlaces(text, providers, country, countPlace)} suggestMore={(text) => (text.length >= 2 ? lookupPlaces(text) : [])} minLength={0}
+        suggest={(text) => suggestPlaces(text, providers, country, countPlace, near)} suggestMore={(text) => (text.length >= 2 ? lookupPlaces(text, { country, near }) : [])} minLength={0}
         className="w-full bg-transparent outline-none" placeholder={country ? `All of ${country}` : 'Any city, state or ZIP'} aria-label="Where: city, state or ZIP" />
     </label>
     <label className="flex items-center gap-3 px-3 py-3 md:w-48 md:flex-none">

@@ -58,7 +58,7 @@ const AuthenticatedApp = () => {
   if (isLoadingPublicSettings || isLoadingAuth) {
     return (
       <div className="fixed inset-0 flex items-center justify-center">
-        <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-800 rounded-full animate-spin"></div>
+        <span aria-hidden="true" className="kc-spinner" style={{ width: 36, height: 36, borderWidth: 3 }}></span>
       </div>
     );
   }

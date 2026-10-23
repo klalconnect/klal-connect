@@ -5,8 +5,10 @@ import { ArrowLeft, SlidersHorizontal } from 'lucide-react';
 import { api } from '@/api/client';
 import { slugify } from '@/lib/paths';
 import ResourceCard from '@/components/ResourceCard';
+import { jewishOwnedFirst } from '@/lib/ownership';
 import { useMetaTags } from '@/hooks/useMetaTags';
 import { categoryLabel } from '@/lib/categories';
+import { LoadingCards, Spinner } from '@/components/Loading';
 
 // The client-side twin of the /directory/:category(/:city) prerender in
 // server/seo.js — same slug parsing, same filtering. Without this route a
@@ -31,9 +33,9 @@ export default function DirectoryCategory() {
   // dashes back into spaces can never restore the comma — so un-slugging and
   // matching on text meant the sitemap advertised URLs that matched nothing.
   const rows = match
-    ? providers.filter((p) => (p.status === 'published' || p.status === undefined)
+    ? jewishOwnedFirst(providers.filter((p) => (p.status === 'published' || p.status === undefined)
         && (p.category || '').toLowerCase() === match.name.toLowerCase()
-        && (!city || slugify(p.city || '') === city))
+        && (!city || slugify(p.city || '') === city)))
     : [];
 
   useMetaTags(match ? {
@@ -52,10 +54,11 @@ export default function DirectoryCategory() {
     <div>
       <span className="eyebrow">DIRECTORY</span>
       <h1 className="title">{match ? `${categoryLabel(match.name)}${where}` : 'Loading…'}</h1>
-      <p className="helper">{loadingProviders ? 'Loading…' : `${rows.length} ${rows.length === 1 ? 'listing' : 'listings'} in the Klal Connect community directory.`}</p>
+      <p className="helper">{loadingProviders ? <span className="inline-flex items-center gap-2"><Spinner/>Finding listings…</span> : `${rows.length} ${rows.length === 1 ? 'listing' : 'listings'} in the Klal Connect community directory.`}</p>
     </div>
     {rows.length > 0
       ? <div className="grid grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-[repeat(2,minmax(0,1fr))] lg:grid-cols-[repeat(3,minmax(0,1fr))]">{rows.map((p) => <ResourceCard key={p.id} provider={p}/>)}</div>
-      : !loadingProviders && <div className="empty"><SlidersHorizontal/><p>No listings here yet.</p><Link to="/add" className="primary">Add the first listing</Link></div>}
+      : loadingProviders ? <LoadingCards count={6} label={null} grid="grid grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-[repeat(2,minmax(0,1fr))] lg:grid-cols-[repeat(3,minmax(0,1fr))]"/>
+      : <div className="empty"><SlidersHorizontal/><p>No listings here yet.</p><Link to="/add" className="primary">Add the first listing</Link></div>}
   </div>;
 }

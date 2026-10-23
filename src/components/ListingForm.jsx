@@ -11,6 +11,7 @@ import { GALLERY_MAX } from '@/lib/listing';
 import MinyanEditor from '@/components/MinyanEditor';
 import { isShulListing } from '@/lib/minyanim';
 import { COUNTRIES, countryName, countryOf, US } from '@/lib/countries';
+import { useUserLocation } from '@/lib/userLocation';
 import { US_STATES } from '@/components/CityInput';
 const blank={name:'',tagline:'',category:'',subcategory:'',short_description:'',description:'',address:'',city:'',state:'',country:'',zip:'',phone:'',text_phone:'',email:'',website:'',hours:'',service_areas:'',languages:'English',delivery_mode:'in_person',whatsapp:'',payment_link_url:'',badges:[],gallery:[],minyanim:[],minyan_url:'',kitchen:'',not_jewish_owned:false};
 // initialCategory arrives from /add?category=… — an empty category tile on the
@@ -48,7 +49,10 @@ const STILL_UPLOADING='Your image is still uploading — one moment.';
 // `logo` is '' while the stored image is left alone, a URL once a new one has
 // uploaded, and null when the person has asked for the stored one to come
 // down. The third state is what lets an edit send logo_url: '' at all.
-export default function ListingForm({initialCategory='',initialName='',sourcePostId='',provider=null,ownerEdit=false}){const vouchesOn=useVouchesEnabled();const [data,setData]=useState(()=>(provider?fromProvider(provider):{...blank,category:initialCategory,name:initialName})),[categories,setCategories]=useState([]),[done,setDone]=useState(false),[mine,setMine]=useState(false),[claimed,setClaimed]=useState(false),[logo,setLogo]=useState(''),[err,setErr]=useState(''),[busy,setBusy]=useState(false),[uploading,setUploading]=useState(false),[uploadErr,setUploadErr]=useState(''),[galleryUploading,setGalleryUploading]=useState(false);const logoInput=useRef(null),uploadSeq=useRef(0);useEffect(()=>{api.entities.Category.list('order').then(setCategories)},[]);const change=e=>setData({...data,[e.target.name]:e.target.value});
+export default function ListingForm({initialCategory='',initialName='',sourcePostId='',provider=null,ownerEdit=false}){const vouchesOn=useVouchesEnabled();const [data,setData]=useState(()=>(provider?fromProvider(provider):{...blank,category:initialCategory,name:initialName})),[categories,setCategories]=useState([]),[done,setDone]=useState(false),[mine,setMine]=useState(false),[claimed,setClaimed]=useState(false),[logo,setLogo]=useState(''),[err,setErr]=useState(''),[busy,setBusy]=useState(false),[uploading,setUploading]=useState(false),[uploadErr,setUploadErr]=useState(''),[galleryUploading,setGalleryUploading]=useState(false);const logoInput=useRef(null),uploadSeq=useRef(0);useEffect(()=>{api.entities.Category.list('order').then(setCategories)},[]);
+  // A new listing's Country starts on the person's own country, like the
+  // search boxes. Once only: picking a city, or "Choose a country", wins.
+  const myCountry=useUserLocation().country,countryStarted=useRef(false);useEffect(()=>{if(provider||countryStarted.current||!myCountry)return;countryStarted.current=true;setData(d=>d.country?d:{...d,country:myCountry})},[provider,myCountry]);const change=e=>setData({...data,[e.target.name]:e.target.value});
   // The upload used to be fire-and-forget: a rejected request (too large, not
   // an image, storage down, session expired) threw inside the change handler
   // where nothing caught it, so the input looked accepted and `logo` stayed

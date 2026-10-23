@@ -58,3 +58,28 @@ export function categoryLabel(name) {
   const text = String(name ?? '').trim();
   return SHUL_WORDS.test(text) ? SHUL_LABEL : name;
 }
+
+// The "Category · Subcategory" line on a card or listing page. Every shul is
+// filed as "Shuls & Minyanim" / "Shuls", and both read as Shul/Synagogue, so
+// the line said the same thing twice. A subcategory is shown only when it adds
+// something; with none, or one that reads the same, the category stands alone.
+export function categoryLine(provider) {
+  const main = categoryLabel(provider?.category);
+  const sub = categoryLabel(provider?.subcategory);
+  const same = (a, b) => String(a ?? '').trim().toLowerCase() === String(b ?? '').trim().toLowerCase();
+  return [main, sub && !same(sub, main) ? sub : ''].filter((s) => String(s ?? '').trim()).join(' · ');
+}
+
+// Whether a listing's short description already says its tagline. Imported
+// listings often carry the same sentence in both, or a description that is the
+// tagline plus "From GoDaven's worldwide minyan database." A card that prints
+// the grey subtitle and then the same words again underneath reads as machine
+// output, so when this is true the subtitle is left out and the description
+// says it once. Case, spacing and a trailing full stop do not count as a
+// difference, and the match has to end on a whole word.
+export function taglineRepeated(provider) {
+  const norm = (s) => String(s ?? '').toLowerCase().replace(/\s+/g, ' ').replace(/[.\s]+$/, '').trim();
+  const tag = norm(provider?.tagline);
+  const body = norm(provider?.short_description);
+  return !!tag && body.startsWith(tag) && !/[\p{L}\p{N}]/u.test(body.charAt(tag.length));
+}

@@ -13,7 +13,7 @@
 import { store } from './db.js';
 import { vouchesEnabled } from './settings.js';
 import { slugify } from './seo-shared.js';
-import { categoryLabel } from '../src/lib/categories.js';
+import { categoryLabel, categoryLine, taglineRepeated } from '../src/lib/categories.js';
 import { isScheduled } from '../src/lib/scheduledPosts.js';
 
 const SITE_NAME = 'Klal Connect';
@@ -109,7 +109,7 @@ function providerSchema(provider, url, image) {
 // so it exists to be parsed, not styled.
 function providerBody(provider, notes, vouches) {
   const facts = [
-    ['Category', [provider.category, provider.subcategory].filter(Boolean).map(categoryLabel).join(' · ')],
+    ['Category', categoryLine(provider)],
     ['Location', addressOf(provider)],
     ['Serves', (provider.service_areas || []).join(', ')],
     ['Languages', (provider.languages || []).join(', ')],
@@ -120,7 +120,7 @@ function providerBody(provider, notes, vouches) {
   ].filter(([, v]) => v);
   return [
     `<h1>${escapeHtml(provider.name)}</h1>`,
-    provider.tagline ? `<p>${escapeHtml(provider.tagline)}</p>` : '',
+    provider.tagline && !taglineRepeated(provider) ? `<p>${escapeHtml(provider.tagline)}</p>` : '',
     provider.short_description ? `<p>${escapeHtml(provider.short_description)}</p>` : '',
     provider.description ? `<p>${escapeHtml(provider.description)}</p>` : '',
     facts.length ? `<dl>${facts.map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd>`).join('')}</dl>` : '',

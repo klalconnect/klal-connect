@@ -16,6 +16,7 @@ import { DIRECTORY_CATEGORIES } from '../src/lib/categories.js';
 import { fixListingTypes } from './listing-types.js';
 import { fillListingCountries } from './listing-countries.js';
 import { fillListingKitchens } from './listing-kitchens.js';
+import { fixListingRepeats, fixGarbledNames, removeDuplicateListing } from './listing-repeats.js';
 
 const KEY = 'categories_offered';
 const SHULS_MOVED = 'community_shuls_removed';
@@ -67,6 +68,9 @@ async function run() {
   await fixListingTypes();
   await fillListingCountries();
   await fillListingKitchens();
+  await fixListingRepeats();
+  await fixGarbledNames();
+  await removeDuplicateListing();
   return added;
 }
 

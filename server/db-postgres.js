@@ -373,6 +373,11 @@ export const users = {
     const { rows } = await pool.query('SELECT * FROM users ORDER BY created_date DESC');
     return rows;
   },
+  async delete(id) {
+    await ready();
+    const { rowCount } = await pool.query('DELETE FROM users WHERE id = $1', [id]);
+    return rowCount > 0;
+  },
 };
 
 export const otp = {

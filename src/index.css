@@ -206,7 +206,8 @@
   .form-grid { @apply grid gap-4 sm:grid-cols-2; }
   .info { @apply flex items-center gap-2 text-brand-body; }
   .info svg { @apply h-4 w-4 shrink-0 text-brand-teal; }
-  .loading { @apply grid min-h-[60vh] place-items-center text-sm text-brand-muted; }
+  /* Every page-sized "Loading…" gets the teal spinner above its words. */
+  .loading { @apply grid min-h-[60vh] place-content-center justify-items-center gap-3 text-sm font-medium text-brand-body; }
   .empty { @apply grid min-h-52 place-items-center gap-3 rounded-xl border border-dashed border-brand-line bg-brand-surface p-8 text-center text-brand-muted; }
   /* brand-body, not brand-muted: muted measured 4.3:1 light and 4.26:1 dark on
      the tinted strip these sit in — just under AA, in both themes, for a control
@@ -219,6 +220,18 @@
   .tab.active { @apply bg-brand-surface text-brand-ink shadow-sm; }
   .view-button { @apply flex items-center gap-1 rounded-lg px-3 py-2 text-xs font-semibold; }
   .view-button.active { @apply bg-brand-navy text-white; }
+  /* Resources quick category picks. One scrolling row on a phone, wrapping on
+     a computer; see-through tint so they sit lightly above the results. */
+  .quick-cats { @apply -mx-1 flex gap-2 overflow-x-auto px-1 pb-1 md:flex-wrap md:overflow-visible; scrollbar-width: none; }
+  .quick-cat { @apply shrink-0 whitespace-nowrap rounded-full bg-brand-tint px-3 py-1.5 text-xs font-semibold text-brand-teal ring-1 ring-transparent hover:ring-brand-teal; }
+  /* The category that is on, and a kind picked inside it: filled teal. More is
+     an outline, so it reads as "show more" rather than one of the choices. */
+  .quick-cat.on, .quick-cat.picked { @apply bg-brand-teal text-brand-canvas; }
+  .quick-cat.on { @apply inline-flex items-center gap-1; }
+  /* Inside a category there are only a handful, so they wrap on a phone too
+     and More opens in place instead of off the edge. */
+  .quick-cats.wrap { @apply flex-wrap overflow-visible; }
+  .quick-cat.more { @apply inline-flex items-center gap-1 bg-transparent ring-brand-line; }
   .icon-button { @apply grid h-9 w-9 place-items-center rounded-lg text-brand-teal hover:bg-brand-tint active:scale-95 motion-reduce:transform-none; }
   .icon-button svg { @apply h-4 w-4; }
   .admin-nav { @apply flex w-full items-center justify-between rounded-xl px-4 py-3 text-left text-sm font-semibold hover:bg-brand-surface;
@@ -262,3 +275,17 @@
   100% { opacity: 0; transform: scale(0) rotate(180deg); }
 }
 @media (prefers-reduced-motion: reduce) { .kc-burst { display: none; } }
+
+/* Loading (src/components/Loading.jsx). A teal arc turning on a faint teal
+   ring, and grey stand-in cards with a soft light sweeping across them.
+   Reduced-motion slows the spinner and stills the sweep. */
+.loading::before { content: ''; width: 2.25rem; height: 2.25rem; border-radius: 9999px; border: 3px solid hsl(var(--brand-teal) / .18); border-top-color: hsl(var(--brand-teal)); animation: kc-spin .75s linear infinite; }
+.kc-spinner { display: inline-block; flex-shrink: 0; width: 1.125rem; height: 1.125rem; border-radius: 9999px; border: 2px solid hsl(var(--brand-teal) / .18); border-top-color: hsl(var(--brand-teal)); animation: kc-spin .75s linear infinite; }
+@keyframes kc-spin { to { transform: rotate(360deg); } }
+.kc-skel { position: relative; overflow: hidden; background: hsl(var(--brand-line)); }
+.kc-skel::after { content: ''; position: absolute; inset: 0; transform: translateX(-100%); background: linear-gradient(90deg, transparent, hsl(var(--brand-surface) / .65), transparent); animation: kc-shimmer 1.3s ease-in-out infinite; }
+@keyframes kc-shimmer { to { transform: translateX(100%); } }
+@media (prefers-reduced-motion: reduce) {
+  .kc-spinner, .loading::before { animation-duration: 2s; }
+  .kc-skel::after { animation: none; }
+}

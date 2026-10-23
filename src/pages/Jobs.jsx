@@ -5,6 +5,7 @@ import { startsWord } from '@/lib/searchTerms';
 import { api } from '@/api/client';
 import { Briefcase, Search, Plus, MapPin, Wifi } from 'lucide-react';
 import { EMPLOYMENT_TYPES, employmentLabel } from '@/lib/jobTypes';
+import { LoadingCards } from '@/components/Loading';
 
 export default function Jobs() {
   const [jobs, setJobs] = useState([]);
@@ -57,7 +58,7 @@ export default function Jobs() {
       {EMPLOYMENT_TYPES.map((t) => <button key={t.id} type="button" onClick={() => setType(t.id)} className={`rounded-full px-3 py-1.5 text-xs font-semibold ring-1 ${type === t.id ? 'bg-brand-navy text-white ring-brand-navy' : 'bg-brand-surface text-brand-muted ring-brand-line'}`}>{t.label}</button>)}
     </div>
 
-    {loading ? <p className="text-sm text-brand-body">Loading…</p> : open.length === 0
+    {loading ? <LoadingCards kind="person" count={3} label="Loading jobs…"/> : open.length === 0
       ? <div className="empty"><Briefcase/><p>No open jobs {q || type ? 'match your search' : 'yet'}. Be the first to post one.</p></div>
       : <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{open.map((j) => <JobCard key={j.id} job={j}/>)}</div>}
 

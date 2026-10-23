@@ -6,6 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Mail, ArrowLeft, Loader2 } from "lucide-react";
 import AuthLayout from "@/components/AuthLayout";
+import EmailSuggestion from "@/components/EmailSuggestion";
+import { suggestEmail } from "@/lib/emailCheck";
+import { friendlyAuthError } from "@/lib/authErrors";
 
 export default function ForgotPassword() {
   const navigate = useNavigate();
@@ -13,13 +16,19 @@ export default function ForgotPassword() {
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
   const [unavailable, setUnavailable] = useState("");
+  const [suggestion, setSuggestion] = useState(null);
+  const [keptEmail, setKeptEmail] = useState(null);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const typed = email.trim();
+    const fix = typed !== keptEmail ? suggestEmail(typed) : null;
+    if (fix) { setSuggestion(fix); return; }
+    setSuggestion(null);
     setLoading(true);
     try {
-      const result = await api.auth.resetPasswordRequest(email.trim());
-      const params = new URLSearchParams({ email: email.trim() });
+      const result = await api.auth.resetPasswordRequest(typed);
+      const params = new URLSearchParams({ email: typed });
       // Local dev gets the code prefilled; production builds drop this line
       // entirely and the person types the code from the email.
       if (import.meta.env.DEV && result?.dev_code) params.set("code", result.dev_code);
@@ -29,7 +38,7 @@ export default function ForgotPassword() {
       // instead of promising a link that will never arrive. Any other failure
       // still shows the neutral "if an account exists" message, so the form
       // never reveals which addresses are registered.
-      if (err?.status === 503) setUnavailable(err.message);
+      if (err?.status === 503) setUnavailable(friendlyAuthError(err));
       else setSent(true);
     } finally {
       setLoading(false);
@@ -66,11 +75,16 @@ export default function ForgotPassword() {
                 autoFocus
                 placeholder="you@example.com"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => { setEmail(e.target.value); setSuggestion(null); }}
                 className="pl-10 h-12"
                 required
               />
             </div>
+            <EmailSuggestion
+              suggestion={suggestion}
+              onAccept={() => { setEmail(suggestion); setSuggestion(null); }}
+              onKeep={() => { setKeptEmail(email.trim()); setSuggestion(null); }}
+            />
           </div>
           <Button type="submit" className="w-full h-12 font-medium" disabled={loading}>
             {loading ? (

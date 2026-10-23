@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/api/client';
 import useVouchesEnabled from '@/hooks/useVouchesEnabled';
-import { MapPin, Plus, ArrowRight, MessageCircle, ShieldCheck, Flame, Moon, Newspaper, PenSquare, Users } from 'lucide-react';
+import { MapPin, Plus, ArrowRight, MessageCircle, ShieldCheck, Flame, Moon, Newspaper, PenSquare, Users, LogIn } from 'lucide-react';
 import SearchPanel from '@/components/SearchPanel';
 import AddListingPrompt from '@/components/AddListingPrompt';
 import ResourceCard from '@/components/ResourceCard';
@@ -20,6 +20,7 @@ import { nearbyListings } from '@/lib/nearby';
 import useNearHere from '@/hooks/useNearHere';
 import { useUserLocation } from '@/lib/userLocation';
 import NearYouPrompt from '@/components/NearYouPrompt';
+import { LoadingCards } from '@/components/Loading';
 
 // The words people actually use, as searches rather than category filters —
 // "Plumbers" is not a category, and the alias layer in @/lib/searchTerms is
@@ -40,11 +41,11 @@ const LAUNCH_COMMUNITY = 'Boca Raton';
 
 export default function Home() {
   const vouchesOn = useVouchesEnabled();
-  const { data: providers = [] } = useQuery({
+  const { data: providers = [], isLoading: loadingListings } = useQuery({
     queryKey: ['providers', 'all'],
     queryFn: () => api.entities.Provider.filter({ status: 'published' }),
   });
-  const { data: categories = [] } = useQuery({
+  const { data: categories = [], isLoading: loadingCategories } = useQuery({
     queryKey: ['categories'],
     queryFn: () => api.entities.Category.list('order'),
   });
@@ -75,23 +76,32 @@ export default function Home() {
     return [...found, ...extra].slice(0, 8);
   }, [providers, community]);
 
-  // Counted against exactly what a click will return, so a number on a chip is
-  // a promise the directory keeps. Links with results come first; the rest stay
-  // visible, because a gap is also information — and an invitation.
+  // Counted against what a click will return, only to put the links with
+  // results first and grey out the rest; the number itself is not shown (see
+  // the category tiles below). A gap stays visible, because it is also
+  // information — and an invitation.
   const quickLinks = useMemo(() => QUICK_LINKS
     .map(([label, q]) => ({ label, q, count: countMatches(providers, q, community) }))
     .sort((a, b) => (b.count > 0) - (a.count > 0)), [providers, community]);
 
-  // Real counts or none. A category with nothing in it is not hidden and is
-  // not promised as "coming soon" — nobody has committed to filling it. It
-  // asks for the first listing instead, which is the actual bottleneck.
+  // Counted only to order the tiles and spot the empty ones; no number is
+  // shown, the same as the category cards on Resources. Every count on this
+  // page measured something slightly different (a city name, a search, a
+  // drive radius), so they disagreed with each other and with the results a
+  // tap opened. A category with nothing in it is not hidden and is not
+  // promised as "coming soon" — nobody has committed to filling it. It asks
+  // for the first listing instead, which is the actual bottleneck.
   const tiles = useMemo(() => categories
     .map((c) => ({ ...c, count: local.filter((p) => p.category === c.name).length }))
     .sort((a, b) => b.count - a.count || (a.order ?? 99) - (b.order ?? 99))
     .slice(0, 8), [categories, local]);
 
+  const timesOnTop = useShabbosAtTop();
 
   return <div className="page-shell space-y-14 py-8 md:space-y-16 md:py-12">
+    {/* From Thursday's sunset until Friday ends, the times and parsha are
+        what people come for, so the strip moves up from Near you to the top. */}
+    {timesOnTop && <ShabbosTimesBar className="-mb-8 md:-mb-10" />}
     {/* The feed leads: Klal Connect is first a place where the frum business
         world talks to itself. The directory follows, as what you get once
         you're here. */}
@@ -103,7 +113,10 @@ export default function Home() {
         <Link to="/feed" className="primary"><Newspaper size={16} />Open the feed</Link>
         {me
           ? <Link to="/feed" className="secondary"><PenSquare size={16} />Write a post</Link>
-          : <Link to="/register" className="secondary"><Users size={16} />Join free</Link>}
+          : <>
+            <Link to="/register" className="secondary"><Users size={16} />Join free</Link>
+            <Link to="/login" className="secondary"><LogIn size={16} />Log in</Link>
+          </>}
       </div>
     </section>
 
@@ -114,7 +127,7 @@ export default function Home() {
       <div className="rounded-xl bg-brand-surface p-5 ring-1 ring-brand-teal/30">
         <span className="eyebrow">AND ONCE YOU'RE HERE</span>
         <h2 className="mt-1 font-heading text-xl font-bold text-brand-ink sm:text-2xl">Use it as a resource too.</h2>
-        <p className="mt-1 text-sm text-brand-body sm:text-base">Find a plumber, a gemach, a shul or a therapist from a directory of frum businesses and community resources.</p>
+        <p className="mt-1 text-sm text-brand-body sm:text-base">Find a shul, a mikvah, a restaurant or a caterer from a directory of frum businesses and community resources.</p>
       </div>
       {/* Only a place someone picked fills the Where box; their own city just
           shapes the page below, so the search itself starts empty. */}
@@ -123,8 +136,8 @@ export default function Home() {
         {quickLinks.map(({ label, q, count }) => <Link
           key={q}
           to={`/browse?q=${encodeURIComponent(q)}${community ? `&location=${encodeURIComponent(community)}` : ''}`}
-          className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold transition ${count > 0 ? 'bg-brand-tint text-brand-teal hover:ring-1 hover:ring-brand-teal' : 'text-brand-muted ring-1 ring-brand-line hover:text-brand-ink'}`}
-        >{label}{count > 0 && <span className="text-xs font-bold text-brand-teal/70">{count}</span>}</Link>)}
+          className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold transition ${count > 0 || loadingListings ? 'bg-brand-tint text-brand-teal hover:ring-1 hover:ring-brand-teal' : 'text-brand-muted ring-1 ring-brand-line hover:text-brand-ink'}`}
+        >{label}</Link>)}
       </div>
       <AddListingPrompt />
     </section>
@@ -133,24 +146,26 @@ export default function Home() {
     {communities.length > 0 && <section>
       <div className="flex flex-wrap items-center gap-2">
         <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-brand-ink"><MapPin size={15} className="text-brand-teal" />Community</span>
-        {communities.map(({ city, count }) => <button
+        {communities.map(({ city }) => <button
           key={city}
           type="button"
           onClick={() => setCommunity(city === community ? '' : city)}
           className={`rounded-full px-3 py-1.5 text-sm font-semibold transition ${city === community ? 'bg-brand-navy text-white' : 'bg-brand-surface text-brand-body ring-1 ring-brand-line hover:text-brand-ink'}`}
-        >{city}{count > 0 && city !== community && <span className="ml-1.5 text-xs text-brand-muted">{count}</span>}</button>)}
+        >{city}</button>)}
         {community && <button type="button" onClick={() => setCommunity('')} className="text-sm font-medium text-brand-muted hover:text-brand-ink">Show everywhere</button>}
       </div>
     </section>}
 
-    <LocalSection providers={providers} community={community} />
+    <LocalSection providers={providers} loading={loadingListings} community={community} showTimes={!timesOnTop} />
 
     <section>
       <div className="section-head">
         <div><span className="eyebrow">BROWSE</span><h2 className="title">Categories{community ? ` in ${community}` : ''}</h2></div>
         {categories.length > tiles.length && <Link to="/directory" className="text-sm font-semibold text-brand-teal">All {categories.length} categories</Link>}
       </div>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+      {/* Until the listings arrive every tile would count zero and ask for
+          "Add the first", so stand-in tiles shimmer instead. */}
+      {loadingListings || loadingCategories ? <LoadingCards kind="tile" count={8} label={null} /> : <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
         {tiles.map((c) => {
           const Icon = iconFor(c.icon && c.icon !== 'MoreHorizontal' ? c.icon : guessIcon(c.name));
           const empty = c.count === 0;
@@ -161,12 +176,10 @@ export default function Home() {
           >
             <Icon className={`mb-3 ${empty ? 'text-brand-muted' : 'text-brand-teal'}`} size={22} />
             <span className={`block text-sm font-semibold leading-tight ${empty ? 'text-brand-body' : 'text-brand-ink'}`}>{categoryLabel(c.name)}</span>
-            <span className="mt-1 block text-xs text-brand-muted">
-              {empty ? 'Add the first' : `${c.count} listed`}
-            </span>
+            {empty && <span className="mt-1 block text-xs text-brand-muted">Add the first</span>}
           </Link>;
         })}
-      </div>
+      </div>}
     </section>
 
     {/* The mission, and how the place works — below the useful part, not
@@ -207,7 +220,7 @@ function FeedPreview() {
       <div><span className="eyebrow">KLAL FEED</span><h2 className="title">Trending now</h2></div>
       <Link to="/feed" className="text-sm font-semibold text-brand-teal">See the feed</Link>
     </div>
-    {isLoading && <div className="loading">Loading feed…</div>}
+    {isLoading && <LoadingCards kind="post" count={3} label="Loading the latest posts…" />}
     {!isLoading && posts.length === 0 && <div className="empty"><p>Be the first to post to the Klal feed.</p><Link to="/feed" className="primary"><PenSquare size={16} />Write a post</Link></div>}
     <div className="space-y-3">
       {posts.slice(0, 3).map((p) => {
@@ -246,20 +259,44 @@ function FeedPreview() {
 // Bahamas; with no idea where the person is, it offers to find out.
 const byUse = (a, b) => (b.usage_count || 0) - (a.usage_count || 0) || String(b.created_date || '').localeCompare(String(a.created_date || ''));
 
-function LocalSection({ providers, community }) {
+// Thursday's sunset to the end of Friday, where the times are for (the server
+// works the window out with the zmanim). A status saved before it sent the
+// window falls back to the device's own Friday.
+function useShabbosAtTop() {
   const { status } = useShabbosStatus();
-  const { origin, where, ask } = useNearHere(providers, community);
-  const near = useMemo(() => nearbyListings(providers, origin, { rank: byUse }), [providers, origin]);
-  const shown = near.slice(0, 4);
+  const now = Date.now();
+  if (status?.pinFrom && status?.pinUntil) return now >= status.pinFrom && now < status.pinUntil;
+  return new Date(now).getDay() === 5;
+}
+
+// City, candle lighting, Havdalah and the parsha in one strip. Nothing when
+// there is no place to work from yet.
+function ShabbosTimesBar({ className = '' }) {
+  const { status } = useShabbosStatus();
   const times = status?.cityLabel && (status.startsAt || status.endsAt) ? status : null;
-  const timesBar = times && <div className="mb-4 flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg bg-brand-surface px-4 py-3 text-sm ring-1 ring-brand-line">
+  if (!times) return null;
+  return <div className={`flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg bg-brand-surface px-4 py-3 text-sm ring-1 ring-brand-line ${className}`}>
     <span className="font-semibold text-brand-ink">{times.cityLabel}</span>
     {times.startsAt && <span className="inline-flex items-center gap-1.5 text-brand-body"><Flame size={14} className="text-brand-gold-ink" />Candle lighting <b className="text-brand-ink">{timeInZone(times.startsAt, times.tzid)}</b></span>}
     {times.endsAt && <span className="inline-flex items-center gap-1.5 text-brand-body"><Moon size={14} className="text-brand-teal" />Havdalah <b className="text-brand-ink">{timeInZone(times.endsAt, times.tzid)}</b></span>}
     {times.parsha && <span className="text-brand-muted">{times.parsha}</span>}
   </div>;
+}
+
+function LocalSection({ providers, loading, community, showTimes = true }) {
+  const { origin, where, ask } = useNearHere(providers, community);
+  const near = useMemo(() => nearbyListings(providers, origin, { rank: byUse }), [providers, origin]);
+  const shown = near.slice(0, 4);
+  const timesBar = showTimes && <ShabbosTimesBar className="mb-4" />;
 
   if (!origin) return <div>{timesBar}<NearYouPrompt ask={ask} title="Help near you">Or pick a community above.</NearYouPrompt></div>;
+  // Still loading: shimmer where the nearby cards will land, rather than
+  // leaving a gap that then jumps open.
+  if (loading) return <section>
+    <div className="section-head"><div><span className="eyebrow">NEAR YOU</span><h2 className="title">Help {where ? `near ${where}` : 'near you'}</h2></div></div>
+    {timesBar}
+    <LoadingCards count={2} label="Finding listings near you…" />
+  </section>;
   if (shown.length === 0) return timesBar || null;
 
   const browseHere = community ? `/browse?location=${encodeURIComponent(community)}`
@@ -269,7 +306,7 @@ function LocalSection({ providers, community }) {
       <div>
         <span className="eyebrow">NEAR YOU</span>
         <h2 className="title">Help {where ? `near ${where}` : 'near you'}</h2>
-        <p className="helper">{near.length} {near.length === 1 ? 'listing' : 'listings'} within about an hour's drive, closest first.</p>
+        <p className="helper">Within about an hour's drive, closest first.</p>
       </div>
       {near.length > shown.length && <Link to={browseHere} className="text-sm font-semibold text-brand-teal">See more</Link>}
     </div>

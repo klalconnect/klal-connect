@@ -9,6 +9,7 @@ import PeopleYouMayKnow from '@/components/PeopleYouMayKnow';
 import { loadMyConnections, suggestSimilar, sentThisWeekCount, connectedIds, topJob, WEEKLY_CAP } from '@/lib/connections';
 import InviteButton from '@/components/InviteButton';
 import { WORK_STATUSES } from '@/lib/workStatus';
+import { LoadingCards } from '@/components/Loading';
 
 export default function People(){
   const [me,setMe]=useState();
@@ -96,7 +97,7 @@ export default function People(){
 
     <section>
       <div className="section-head"><h2 className="title">{q ? 'Matching profiles' : 'All members'}</h2><Link to="/profile" className="text-sm font-semibold text-brand-teal">My profile</Link></div>
-      {loading ? <p className="text-sm text-brand-body">Loading…</p> : filtered.length === 0
+      {loading ? <LoadingCards kind="person" count={6} label="Loading members…"/> : filtered.length === 0
         ? <p className="text-sm text-brand-muted">No members found{q ? ` for "${q}"` : ''}.</p>
         : <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{filtered.map(({user})=><UserCard key={user.id} user={user} me={me} connections={connections} onReload={reload}/>)}</div>}
     </section>

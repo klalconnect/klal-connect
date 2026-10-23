@@ -11,8 +11,9 @@ import { randomBytes } from 'node:crypto';
 import { store, users, userToPublic, otp, geoCache, GUEST_EMAIL } from './db.js';
 import {
   attachUser, requireAuth, requireAdmin,
-  hashPassword, checkPassword, signToken, deliverCode, canDeliverCodes,
+  hashPassword, checkPassword, signToken, deliverCode, canDeliverCodes, sendsRealMail, ADDRESS_REJECTED,
 } from './auth.js';
+import { isUndeliverableEmail } from '../src/lib/emailCheck.js';
 import { functions, publicFunctions, safeExternalUrl, findInviteByCode, assertWritable } from './functions.js';
 import { ADMIN_ONLY_LISTING_FIELDS } from '../src/lib/trust.js';
 import { BADGE_BY_ID, badgeAppliesTo } from '../src/lib/badges.js';
@@ -755,6 +756,60 @@ app.put('/api/users/:id', requireAdmin, async (req, res, next) => {
   res.json(userToPublic(updated));
 });
 
+// Admin only: delete a member for good. Suspending (disabled, above) is the
+// reversible step; this is the one that cannot be undone, which is why the
+// admin screen asks twice. What they wrote and what was addressed to them
+// goes with them: posts, comments, messages, connections, saves, alerts.
+// Listings and company pages are directory information rather than theirs
+// alone, so those stay, and a listing they had claimed goes back to unclaimed.
+// The audit trail (ActivityEvent) is kept.
+const MEMBER_LINKS = ['created_by_id', 'recipient_id', 'requester_id', 'user_id'];
+const KEEP_ON_MEMBER_DELETE = new Set(['Provider', 'Company', 'Category', 'Setting', 'ActivityEvent']);
+app.delete('/api/users/:id', requireAdmin, async (req, res, next) => {
+  try {
+    const target = await users.byId(req.params.id);
+    if (!target) return res.status(404).json({ error: 'Not found' });
+    if (target.id === req.user.id) return res.status(400).json({ error: 'You cannot delete your own account from here.' });
+    if (target.email === GUEST_EMAIL) return res.status(400).json({ error: 'The guest account cannot be deleted.' });
+    let removed = 0;
+    for (const entity of ENTITIES) {
+      if (KEEP_ON_MEMBER_DELETE.has(entity)) continue;
+      const seen = new Set();
+      for (const field of MEMBER_LINKS) {
+        for (const row of await store.filter(entity, { [field]: target.id })) {
+          if (seen.has(row.id)) continue;
+          seen.add(row.id);
+          await store.delete(entity, row.id);
+          removed += 1;
+        }
+      }
+    }
+    for (const listing of await store.filter('Provider', { owner_id: target.id })) {
+      await store.update('Provider', listing.id, { owner_id: null, claimed: false });
+    }
+    await users.delete(target.id);
+    await store.create('ActivityEvent', { type: 'member_deleted', target_id: target.id, email: target.email, removed_rows: removed, by: 'admin' }, req.user);
+    res.json({ ok: true, removed });
+  } catch (err) { next(err); }
+});
+
+// Admin only: delete a listing for good, with what hangs off it (saves,
+// "used them" marks, notes, vouches, claims, suggested edits, reports).
+// Suspending is setting its status to hidden, which the moderation PUT does.
+const LISTING_LINKED = [['SavedProvider', 'provider_id'], ['ProviderUsage', 'provider_id'], ['CommunityNote', 'provider_id'], ['Vouch', 'provider_id'], ['ClaimRequest', 'provider_id'], ['ListingChangeRequest', 'provider_id'], ['ListingReport', 'resource_id']];
+app.delete('/api/admin/listings/:id', requireAdmin, async (req, res, next) => {
+  try {
+    const listing = await store.get('Provider', req.params.id);
+    if (!listing) return res.status(404).json({ error: 'Not found' });
+    for (const [entity, field] of LISTING_LINKED) {
+      for (const row of await store.filter(entity, { [field]: listing.id })) await store.delete(entity, row.id);
+    }
+    await store.delete('Provider', listing.id);
+    await store.create('ActivityEvent', { type: 'listing_deleted', entity: 'Provider', target_id: listing.id, name: listing.name || '', actor_role: req.user.role }, req.user);
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
 const tempPassword = () => {
   const alphabet = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   const bytes = randomBytes(12);
@@ -914,7 +969,7 @@ app.post('/api/auth/google', async (req, res, next) => {
     let created = false;
     if (row) {
       if (row.email === GUEST_EMAIL) return res.status(400).json({ error: 'That account cannot be used.' });
-      if (row.data?.disabled) return res.status(403).json({ error: 'This account has been deactivated.' });
+      if (row.data?.disabled) return res.status(403).json({ error: 'This account has been suspended.' });
       // Google vouches for the address: an unverified email/password account
       // is verified by this, and remembers its Google id.
       row = await users.update(row.id, { verified: true, google_sub: g.sub, ...(row.data?.avatar_url ? {} : (g.picture ? { avatar_url: g.picture } : {})) });
@@ -953,7 +1008,7 @@ app.post('/api/auth/login', async (req, res, next) => {
   // existed, deactivation removed the profile from listings while the
   // password went on working.
   if (row.data?.disabled === true) {
-    return res.status(403).json({ error: 'This account has been deactivated. Please contact us if you think that is a mistake.' });
+    return res.status(403).json({ error: 'This account has been suspended. Please contact us if you think that is a mistake.' });
   }
   // An account that registered while email was on but never entered its code
   // is not in yet. A fresh code goes out and the client shows the same
@@ -1006,6 +1061,7 @@ app.post('/api/auth/register', async (req, res, next) => {
   const email = normalizeEmail(req.body?.email);
   if (!email || !password) return res.status(400).json({ error: 'Email and password are required' });
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return res.status(400).json({ error: 'That does not look like an email address' });
+  if (sendsRealMail() && isUndeliverableEmail(email)) return res.status(422).json({ error: ADDRESS_REJECTED });
   if (String(password).length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
   if (await users.byEmail(email)) return res.status(409).json({ error: 'That email is already registered' });
 
@@ -1027,10 +1083,14 @@ app.post('/api/auth/register', async (req, res, next) => {
     return res.status(201).json({ ok: true, otp_sent: false, access_token: signToken(row), user: sessionUser(userToPublic(row)) });
   }
 
+  // The code goes out before the account exists: an address the mail
+  // service refuses then leaves nothing behind, and the person can fix the
+  // typo and try again instead of hitting "already registered".
+  const code = await otp.issue(String(email).trim(), 'verify');
+  const devCode = await deliverCode(email, 'verify', code);
   const row = await users.create({ email, password_hash: hashPassword(password), role, verified: 0, full_name: full_name || '', ...invitedBy });
   await acceptInvite(invited, row);
-  const code = await otp.issue(String(email).trim(), 'verify');
-  res.status(201).json(withDevCode({ ok: true, otp_sent: true }, await deliverCode(email, 'verify', code)));
+  res.status(201).json(withDevCode({ ok: true, otp_sent: true }, devCode));
 });
 
 // Marks an invite as joined and tells the inviter. Invite rows are reusable
@@ -1042,9 +1102,9 @@ async function acceptInvite(invite, newUser) {
   if (invite.created_by_id && invite.created_by_id !== newUser.id) {
     await store.create('Notification', {
       recipient_id: invite.created_by_id, read: false, type: 'invite_joined',
-      actor_name: newUser.data?.full_name || newUser.email,
+      actor_id: newUser.id, actor_name: newUser.data?.full_name || '',
       target_type: 'user', target_id: newUser.id,
-      message: `${newUser.data?.full_name || 'Someone'} joined Klal from your invite`,
+      message: `${newUser.data?.full_name || 'Someone'} joined using your invite`,
     }, { id: newUser.id, email: newUser.email });
   }
 }
@@ -1187,17 +1247,20 @@ if (!usingObjectStorage) {
 
 // ------------------------------------------------------------- geocoding --
 
-// Signed-in only: an open geocoding proxy would let anyone burn the app's
-// provider quota, and every caller in the app is already authenticated.
-app.get('/api/geo/reverse', requireAuth, async (req, res, next) => {
+// Open to signed-out visitors too, who pick their community before they have
+// an account. They are answered offline only (the curated communities and the
+// bundled world list), so an open endpoint cannot burn the provider's quota.
+app.get('/api/geo/reverse', async (req, res, next) => {
   try {
-    res.json(await reverseGeocode(req.query.lat, req.query.lon));
+    res.json(await reverseGeocode(req.query.lat, req.query.lon, { offline: !req.user || isGuest(req.user) }));
   } catch (err) { next(err); }
 });
 
-app.get('/api/geo/search', requireAuth, async (req, res, next) => {
+app.get('/api/geo/search', async (req, res, next) => {
   try {
-    res.json(await searchPlaces(req.query.q, req.query.limit));
+    const lat = Number(req.query.lat), lng = Number(req.query.lng);
+    const near = req.query.lat != null && req.query.lng != null && Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : null;
+    res.json(await searchPlaces(req.query.q, req.query.limit, { offline: !req.user || isGuest(req.user), country: req.query.country, near }));
   } catch (err) { next(err); }
 });
 
@@ -1259,7 +1322,9 @@ app.use('/api', (req, res) => res.status(404).json({ error: `No such endpoint: $
 // so nothing above is shadowed.
 mountSeo(app, SHELL);
 
-app.use((err, _req, res, _next) => {
+const SOMETHING_WENT_WRONG = 'Something went wrong on our side. Please try again in a few minutes.';
+
+app.use((err, req, res, _next) => {
   if (err?.code === 'LIMIT_FILE_SIZE') {
     return res.status(413).json({ error: `That image is too large. Please choose one under ${MAX_UPLOAD_MB}MB.` });
   }
@@ -1268,7 +1333,11 @@ app.use((err, _req, res, _next) => {
   const status = err.statusCode || 500;
   if (status >= 500) console.error('[api]', err);
   else console.warn(`[api] ${status} ${err.message}`);
-  res.status(status).json({ error: err.message || 'Server error' });
+  // Sign-up, sign-in and reset are where a new visitor decides whether the
+  // site works. An unexpected failure there gets a sentence, never the raw
+  // error; errors given a status on purpose were written for people.
+  const unexpected = !err.statusCode && req.originalUrl.startsWith('/api/auth');
+  res.status(status).json({ error: unexpected ? SOMETHING_WENT_WRONG : (err.message || 'Server error') });
 });
 
 export default app;

@@ -160,6 +160,13 @@ const users = {
   async all() {
     return [...userRows].sort((a, b) => String(b.created_date).localeCompare(String(a.created_date)));
   },
+  async delete(id) {
+    const i = userRows.findIndex((u) => u.id === id);
+    if (i < 0) return false;
+    userRows.splice(i, 1);
+    onChange({ op: 'del', kind: 'user', id });
+    return true;
+  },
 };
 
 const otp = {

@@ -288,6 +288,27 @@ export function placeCounter(providers, { q = '', country = '', keep = null } = 
 }
 
 /** Keyword suggestions, each counted the way the search itself would count it. */
+// A link's "country=everywhere": Everywhere picked on purpose, which a link
+// with no country cannot say now that no country means "your own".
+export const EVERYWHERE = 'everywhere';
+
+/**
+ * Where the Country box starts: the person's own country (`mine`), so a
+ * visitor from Israel opens on Israel's listings and one from the US on the
+ * US's. Everywhere instead when we do not know their country, nothing is
+ * listed there, or the place typed is somewhere else: a New Yorker searching
+ * Jerusalem should find Jerusalem, not an empty US list. A place with
+ * nothing listed anywhere leaves the box alone.
+ */
+export function startingCountry(providers, mine, where = '') {
+  const name = countryName(mine);
+  if (!name || !providers.some((p) => countryOf(p) === name)) return '';
+  const test = placeMatcher(where, providers, { everywhere: false });
+  if (!test) return name;
+  const found = providers.filter(test);
+  return !found.length || found.some((p) => countryOf(p) === name) ? name : '';
+}
+
 export function suggestKeywords(raw, providers, categories, where = '', country = '') {
   const count = (q) => countMatches(providers, q, where, country);
   const here = inCountry(providers, country);
@@ -308,16 +329,17 @@ export function suggestKeywords(raw, providers, categories, where = '', country 
  * already chosen narrows it. `countFor(place)` lets the page count with its
  * own filters; a place it would show nothing for is left out.
  */
-export function suggestPlaces(raw, providers, country = '', countFor = null) {
+// `near` ({ lat, lng }, optional) puts the places closest to the person first.
+export function suggestPlaces(raw, providers, country = '', countFor = null, near = null) {
   const count = countFor || placeCounter(providers, { country });
-  return listPlaces(raw, providers, country).flatMap((s) => {
+  return listPlaces(raw, providers, country, near).flatMap((s) => {
     if (s.kind !== 'place' || !s.value) return [s];
     const n = count(s.value);
     return n ? [{ ...s, count: n }] : [];
   });
 }
 
-function listPlaces(raw, providers, country) {
+function listPlaces(raw, providers, country, near) {
   const text = String(raw || '').trim();
   const everywhere = { group: 'Places with listings', kind: 'place', label: 'Everywhere', value: '', hint: country ? `all of ${country}` : 'all communities' };
   if (!text) return [everywhere];
@@ -328,7 +350,7 @@ function listPlaces(raw, providers, country) {
   const countries = countriesFrom(here).filter((c) => wanted.has(c.country)).slice(0, 2)
     .map((c) => ({ group: 'Places with listings', kind: 'place', label: c.country, value: c.country, hint: 'country', count: c.count }));
   const states = (!country || country === US) && text.length >= 2 ? stateSuggestions(text, here) : [];
-  return [...('everywhere'.startsWith(text.toLowerCase()) ? [everywhere] : []), ...countries, ...states, ...placeSuggestions(text, here)].slice(0, 8);
+  return [...('everywhere'.startsWith(text.toLowerCase()) ? [everywhere] : []), ...countries, ...states, ...placeSuggestions(text, here, near)].slice(0, 8);
 }
 
 // US states with listings whose name starts a word with what was typed.
