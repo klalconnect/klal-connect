@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Image } from '@/components/ui/image';
 import { MapPin, Briefcase } from 'lucide-react';
 import { topJob } from '@/lib/connections';
+import { PROFILE_TYPE_BY_ID } from '@/lib/affiliations';
 import Headline from '@/components/Headline';
 import ProfileBanner, { PHOTO_EDGE } from '@/components/ProfileBanner';
 import ConnectButton from '@/components/ConnectButton';
@@ -35,8 +36,8 @@ export default function UserCard({ user, me, connections, onReload }) {
           <div className="mt-2 min-w-0">
             <p className="truncate font-semibold text-brand-ink">{user.full_name || 'Community member'}</p>
             <Headline text={user.headline} />
-            <p className="text-sm capitalize text-brand-teal">
-              {(user.profile_type || 'community_member').replace('_', ' ')}
+            <p className="text-sm text-brand-teal">
+              {PROFILE_TYPE_BY_ID[user.profile_type || 'community_member']?.label || String(user.profile_type).replace(/_/g, ' ')}
             </p>
             <WorkStatusBadge user={user} className="mt-1.5" />
           </div>
