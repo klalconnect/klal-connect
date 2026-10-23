@@ -15,6 +15,13 @@ import { REACTION_BY_ID, DEFAULT_REACTION, reactionOf, topReactions } from '@/li
 import { timeAgo, fullDate } from '@/lib/time';
 import { isScheduled, postedAt, scheduleLabel, toLocalInput } from '@/lib/scheduledPosts';
 import { WorkStatusRing } from '@/components/WorkStatus';
+import { videoSrc } from '@/lib/media';
+
+// A post's video. preload="metadata" fetches only the opening frame and the
+// length until someone presses play, so scrolling past costs almost nothing.
+function PostVideo({ url }) {
+  return <video src={videoSrc(url)} controls playsInline preload="metadata" className="max-h-[70vh] w-full rounded-lg bg-black ring-1 ring-brand-line"/>;
+}
 
 // The author's initials, in their photo ribbon's colour when they have one
 // on (the server adds author_work_status as it is now). Too small for the
@@ -29,7 +36,9 @@ function AuthorAvatar({ post }) {
 function RepostedCard({ post }) {
   if(post.repost_removed) return <p className="rounded-lg bg-brand-tint px-4 py-3 text-sm text-brand-muted">The original post is no longer available.</p>;
   const when=timeAgo(post.repost_created_date);
-  return <Link to={`/feed?post=${encodeURIComponent(post.repost_of)}`} className="block space-y-2 rounded-lg p-3 ring-1 ring-brand-line transition hover:bg-brand-tint">
+  // A video's controls cannot sit inside the link, or pressing play opens
+  // the original post instead, so it goes under the linked part.
+  const link=<Link to={`/feed?post=${encodeURIComponent(post.repost_of)}`} className={`block space-y-2 rounded-lg p-3 transition hover:bg-brand-tint ${post.repost_video_url?'':'ring-1 ring-brand-line'}`}>
     <div className="flex items-start gap-2.5">
       <div className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-tint text-xs font-bold text-brand-teal">{(post.repost_author_name||'KC').split(' ').map(x=>x[0]).slice(0,2).join('')}</div>
       <div className="min-w-0 flex-1">
@@ -40,6 +49,8 @@ function RepostedCard({ post }) {
     {post.repost_body&&<p className="line-clamp-6 whitespace-pre-line text-sm leading-6 text-brand-body">{post.repost_body}</p>}
     {post.repost_image_urls?.length>0&&<div className="grid gap-2 sm:grid-cols-2">{post.repost_image_urls.map(u=><img key={u} src={u} className="rounded-lg ring-1 ring-brand-line"/>)}</div>}
   </Link>;
+  if(!post.repost_video_url) return link;
+  return <div className="rounded-lg ring-1 ring-brand-line">{link}<div className="px-3 pb-3"><PostVideo url={post.repost_video_url}/></div></div>;
 }
 
 // Repost: share it to the feed as it is, or with a few words of your own.
@@ -142,6 +153,7 @@ function ScheduledPostItem({ post, onChanged, onDeleted }) {
       </div>
     </form>:<>
       {post.body&&<p className="whitespace-pre-line leading-7 text-brand-body">{post.body}</p>}
+      {post.video_url&&<PostVideo url={post.video_url}/>}
       {post.image_urls?.length>0&&<div className="grid gap-2 sm:grid-cols-2">{post.image_urls.map(u=><img key={u} src={u} className="rounded-lg ring-1 ring-brand-line"/>)}</div>}
       <div className="flex flex-wrap items-center gap-2 border-t pt-3 text-brand-body">
         <button type="button" onClick={()=>setEditing(true)} disabled={!!busy} className={btn}><Pencil size={14}/>Edit</button>
@@ -263,7 +275,8 @@ function LivePostItem({ post, user, onDeleted, onReposted, onChanged }) {
     {post.body&&<p className="whitespace-pre-line leading-7 text-brand-body">{post.body}</p>}
     {post.body&&<TranslateToggle text={post.body} enabled={translate.enabled} languages={translate.languages}/>}
     {isRepost&&<RepostedCard post={post}/>}
-    {post.image_urls?.length>0&&<div className="grid gap-2 sm:grid-cols-2">{post.image_urls.map(u=><img key={u} src={u} className="rounded-lg ring-1 ring-brand-line"/>)}</div>}
+    {post.video_url&&<PostVideo url={post.video_url}/>}
+      {post.image_urls?.length>0&&<div className="grid gap-2 sm:grid-cols-2">{post.image_urls.map(u=><img key={u} src={u} className="rounded-lg ring-1 ring-brand-line"/>)}</div>}
     {reporting&&<ReportPostForm post={post} onClose={()=>setReporting(false)}/>}
     {(likes>0||cc>0||reposts>0||showViews)&&<div className="flex items-center gap-3 text-xs text-brand-muted">
       {likes>0&&<span className="flex items-center gap-1"><span className="flex -space-x-1">{stack.map(r=><span key={r.id} className="grid h-5 w-5 place-items-center rounded-full bg-brand-surface text-[13px] ring-1 ring-brand-line" title={r.label}>{r.emoji}</span>)}</span>{likes}</span>}

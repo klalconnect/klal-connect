@@ -42,6 +42,7 @@ export function LinkedInShareDialog({ post, onClose }) {
   const [copied,setCopied]=useState(false);
   const text=linkedInText(post);
   const photos=(post.image_urls?.length||0)+(post.repost_image_urls?.length||0);
+  const hasVideo=!!(post.video_url||post.repost_video_url);
   useEffect(()=>{
     const onKey=e=>{ if(e.key==='Escape') onClose(); };
     window.addEventListener('keydown',onKey);
@@ -65,7 +66,8 @@ export function LinkedInShareDialog({ post, onClose }) {
           <ul className="list-disc space-y-0.5 pl-4">
             {photos>0
               ?<li>Photos don't carry over. Add {photos===1?'the photo':`the ${photos} photos`} on LinkedIn yourself.</li>
-              :<li>Photos never carry over, so add any there yourself.</li>}
+              :!hasVideo&&<li>Photos never carry over, so add any there yourself.</li>}
+            {hasVideo&&<li>The video doesn't carry over either. Add it on LinkedIn yourself.</li>}
             <li>The LinkedIn phone app sometimes leaves the text out. It's copied for you, so just paste it in.</li>
           </ul>
         </div>

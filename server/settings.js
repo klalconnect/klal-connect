@@ -9,6 +9,10 @@
 import { store } from './db.js';
 
 export const VOUCHES_SETTING = 'vouches_enabled';
+// Video uploads in feed posts. Unlike vouches this one is on unless an admin
+// turns it off: it is a brake for storage costs, not a feature waiting to be
+// switched on. Videos already posted keep playing either way.
+export const VIDEOS_SETTING = 'videos_enabled';
 
 // Each serverless instance keeps its own copy, so a flip made on one instance
 // reaches the others within this long. A write through this process clears it
@@ -16,14 +20,16 @@ export const VOUCHES_SETTING = 'vouches_enabled';
 const TTL_MS = 30_000;
 const cache = new Map();
 
-async function readFlag(key) {
+async function readFlag(key, fallback = false) {
   const hit = cache.get(key);
   if (hit && Date.now() - hit.readAt < TTL_MS) return hit.value;
-  const value = (await store.filter('Setting', { key }).catch(() => []))[0]?.value === 'true';
+  const row = (await store.filter('Setting', { key }).catch(() => []))[0];
+  const value = row ? row.value === 'true' : fallback;
   cache.set(key, { value, readAt: Date.now() });
   return value;
 }
 
 export const vouchesEnabled = () => readFlag(VOUCHES_SETTING);
+export const videosSwitchOn = () => readFlag(VIDEOS_SETTING, true);
 
 export function forgetSettings() { cache.clear(); }
