@@ -12,11 +12,12 @@ import useNearHere from '@/hooks/useNearHere';
 import { nearbyListings } from '@/lib/nearby';
 import { ownershipRank } from '@/lib/ownership';
 import { readStoredCommunity } from '@/lib/community';
+import { LoadingCards } from '@/components/Loading';
 
 export default function Directory(){
-  const {data:categories=[]}=useQuery({queryKey:['categories'],queryFn:()=>api.entities.Category.list('order')});
+  const {data:categories=[],isLoading:loadingCategories}=useQuery({queryKey:['categories'],queryFn:()=>api.entities.Category.list('order')});
   // The same list Home and the search box load, so it is usually cached.
-  const {data:providers=[]}=useQuery({queryKey:['providers','all'],
+  const {data:providers=[],isLoading:loadingListings}=useQuery({queryKey:['providers','all'],
     queryFn:()=>api.entities.Provider.filter({status:'published'})});
 
   // Every rail is "near you": ranked over the listings within an hour's drive
@@ -62,7 +63,7 @@ export default function Directory(){
       <div className="section-head"><div><span className="eyebrow">EXPLORE</span><h2 className="title">Popular categories</h2></div><Link to="/browse" className="text-sm font-semibold text-brand-teal">View all</Link></div>
       {/* Every category but "Other". The first twelve left Shuls and Insurance
           off the page, and "View all" is for listings, not headings. */}
-      <CategoryGrid categories={categories.filter(c=>c.name!=='Other')}/>
+      {loadingCategories?<LoadingCards kind="tile" count={12} label={null} grid="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6"/>:<CategoryGrid categories={categories.filter(c=>c.name!=='Other')}/>}
     </section>
 
     {/* These three rails were mislabelled against their own queries: the
@@ -73,6 +74,9 @@ export default function Directory(){
         carries the name of what it actually ranks, and one with nothing to
         rank does not appear at all. */}
     {!origin&&providers.length>0&&<NearYouPrompt ask={ask} title="Featured, popular and new near you"/>}
+    {/* The rails below only appear once there is something in them, so while
+        the listings load, stand-in cards hold their place. */}
+    {loadingListings&&origin&&<LoadingCards count={3} label={`Finding listings${here}…`} grid="grid grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-[repeat(3,minmax(0,1fr))]"/>}
     <ProviderSection title={`Featured${here}`} items={featured} more={`/browse${browseNear}`}/>
     <ProviderSection title={`Most used${here}`} items={favorites} more={`/browse${browseNear}`}/>
     <ProviderSection title={`Recently added${here}`} items={recent} more={`/browse${browseNear}`}/>

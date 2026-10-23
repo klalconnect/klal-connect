@@ -10,6 +10,7 @@ import { locateFromCity } from '@/hooks/useDetectLocation';
 import CityInput from '@/components/CityInput';
 import ResourceCard from '@/components/ResourceCard';
 import { nearbyListings, placePoint } from '@/lib/nearby';
+import { LoadingCards } from '@/components/Loading';
 
 // The ninety seconds after sign-up: one question per card, every card
 // skippable, and the value (nearby listings) shown before the ask (invites).
@@ -115,7 +116,7 @@ export default function Welcome() {
           <h1 className="title text-3xl">{type === 'community_member' ? 'Trusted by the community' : 'Put yourself in front of the klal'}</h1>
           <p className="helper">{type === 'community_member' ? (vouchesOn ? `The most-vouched listings near ${city || 'you'}. Vouches come from named members — never anonymous.` : `Some of the most-used listings near ${city || 'you'}.`) : `Your listing is live the moment you post it — members can find it, ${vouchesOn ? 'vouch for it, ' : ''}and message you on WhatsApp.`}</p></div>
         {type === 'community_member'
-          ? (nearby === null ? <div className="loading min-h-24">Loading…</div>
+          ? (nearby === null ? <LoadingCards count={2} label="Finding listings near you…" grid="grid grid-cols-[minmax(0,1fr)] gap-3"/>
             : nearby.length === 0
               ? <div className="empty min-h-32"><Handshake className="text-brand-teal"/><p>The directory is just getting started{city ? ` in ${city}` : ''}. Know a business the community trusts? Add it{vouchesOn ? ' and be its first vouch' : ' so others can find it'}.</p><Link to="/add" className="primary"><Plus size={16}/>Add a listing</Link></div>
               : <div className="grid grid-cols-[minmax(0,1fr)] gap-3">{nearby.map((p) => <ResourceCard key={p.id} provider={p}/>)}</div>)
