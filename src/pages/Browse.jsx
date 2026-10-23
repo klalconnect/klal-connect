@@ -1,14 +1,14 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useId, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '@/api/client';
-import { List, Map as MapIcon, SlidersHorizontal, MessageCircle, Plus, MapPin, Globe, ChevronDown, X } from 'lucide-react';
+import { List, Map as MapIcon, SlidersHorizontal, MessageCircle, Plus, MapPin, Globe, ChevronDown, LocateFixed } from 'lucide-react';
 import ResourceCard from '@/components/ResourceCard';
 import DirectoryMap from '@/components/DirectoryMap';
 import { EVERYWHERE, placeCounter, searchDirectory, startingCountry, suggestKeywords, suggestPlaces } from '@/lib/search';
 import SuggestInput from '@/components/SuggestInput';
 import CountrySelect from '@/components/CountrySelect';
 import { placeMatcher } from '@/lib/place';
-import { inCountry } from '@/lib/countries';
+import { countryName, inCountry } from '@/lib/countries';
 import { KITCHENS, kitchenMatches, kitchenOf } from '@/lib/kitchen';
 import { lookupPlaces } from '@/lib/placeLookup';
 import { providerPath } from '@/lib/paths';
@@ -46,8 +46,15 @@ export default function Browse() {
   // Brooklyn, not Minnesota. "Nearest" needs a location to measure from;
   // without one every distance is unknown, so the list falls back to Most Used.
   const me = useUserLocation();
-  const urlLat = Number(params.get('lat')), urlLng = Number(params.get('lng'));
-  const here = urlLat && urlLng ? { lat: urlLat, lng: urlLng } : me.lat != null ? { lat: me.lat, lng: me.lng } : null;
+  // Where the device is right now, from a Near me tap here or on Home or
+  // Resources. It beats the profile city, so someone driving to another town
+  // for the day sees what is around them there. Kept in the link (lat, lng),
+  // so coming back from a listing finds the same order.
+  const [spot, setSpot] = useState(() => {
+    const lat = Number(params.get('lat')), lng = Number(params.get('lng'));
+    return lat && lng ? { lat, lng, city: '' } : null;
+  });
+  const here = spot || (me.lat != null ? { lat: me.lat, lng: me.lng } : null);
   const located = Boolean(here);
   const country = pickedCountry ?? startingCountry(providers, me.country, place);
   // Where suggestions keep to the country in the box, shown or picked, and
@@ -62,6 +69,30 @@ export default function Browse() {
   const [locating, setLocating] = useState(false);
   const [denied, setDenied] = useState(false);
   const useMyLocation = async () => { setLocating(true); setDenied(!(await me.ask())); setLocating(false); };
+  // Near me asks the device afresh every tap (a minute-old answer at most),
+  // never the saved city. The Where box is emptied, since "near me" and
+  // "in Boca Raton" ask different things, and the country box follows the
+  // device: a New Yorker in Jerusalem gets Israel, not the United States.
+  const whereId = useId();
+  const [finding, setFinding] = useState(false);
+  const [locationOff, setLocationOff] = useState(false);
+  const nearMe = () => {
+    setLocationOff(false);
+    const off = () => { setFinding(false); setLocationOff(true); document.getElementById(whereId)?.focus(); };
+    if (!navigator.geolocation) { off(); return; }
+    setFinding(true);
+    navigator.geolocation.getCurrentPosition(async ({ coords }) => {
+      const at = { lat: coords.latitude, lng: coords.longitude, city: '' };
+      setSpot(at); setPlace(''); setSort('nearest'); setCountry(''); setFinding(false);
+      try {
+        const { city, country_code } = await api.geo.reverse(coords.latitude, coords.longitude);
+        setSpot((now) => (now === at ? { ...at, city: city || '' } : now));
+        const name = countryName(String(country_code || '').toUpperCase());
+        if (name) setCountry(name);
+      } catch { /* the point is what matters; the name is for display */ }
+    }, off, { timeout: 10000, maximumAge: 60000 });
+  };
+  const leaveNearMe = () => { setSpot(null); setCountry(null); };
   const [verified, setVerified] = useState(false);
   // All, Jewish-owned only or Not Jewish-owned only. Remembered in this
   // browser, so a visitor who wants only one kind keeps getting it.
@@ -94,10 +125,11 @@ export default function Browse() {
     const next = new URLSearchParams(location.search);
     const set = (name, value) => { if (value) next.set(name, value); else next.delete(name); };
     set('q', q); set('location', place); set('category', category); set('country', pickedCountry === '' ? EVERYWHERE : pickedCountry); set('kitchen', kitchen);
+    set('lat', spot && spot.lat.toFixed(4)); set('lng', spot && spot.lng.toFixed(4));
     const query = next.toString();
     const url = `${location.pathname}${query ? `?${query}` : ''}${location.hash}`;
     if (url !== `${location.pathname}${location.search}${location.hash}`) window.history.replaceState(window.history.state, '', url);
-  }, [q, place, category, pickedCountry, kitchen]);
+  }, [q, place, category, pickedCountry, kitchen, spot]);
 
   // Every word typed and the place both count; see @/lib/search. Everything
   // but the category is applied here, so the category list can count what
@@ -254,7 +286,7 @@ export default function Browse() {
   // comes with somewhere to look.
   const otherPlaces = [...new Set(elsewhere.map((p) => (p.city || '').trim()).filter(Boolean))].slice(0, 6);
 
-  const clearFilters = () => { setQ(''); choosePlace(''); setCountry(null); setCategory(''); setVerified(false); setOwned(''); setKitchen(''); };
+  const clearFilters = () => { setSpot(null); setLocationOff(false); setQ(''); choosePlace(''); setCountry(null); setCategory(''); setVerified(false); setOwned(''); setKitchen(''); };
 
   return <div className="page-shell py-8">
     <div className="mb-7">
@@ -267,9 +299,16 @@ export default function Browse() {
       <SuggestInput wrapperClassName="md:col-span-4" value={q} onChange={setQ} onPick={pickKeyword}
         suggest={(text) => suggestKeywords(text, providers, categories, place, country)}
         placeholder="Shul, mikvah, restaurant…" aria-label="What are you looking for?" />
-      <SuggestInput wrapperClassName="md:col-span-2" value={place} onChange={choosePlace} onPick={(item) => choosePlace(item.value)}
+      <SuggestInput id={whereId} wrapperClassName="md:col-span-2" value={place} onChange={(v) => { choosePlace(v); setLocationOff(false); }} onPick={(item) => choosePlace(item.value)}
         suggest={(text) => suggestPlaces(text, providers, country, countPlace, near)} suggestMore={(text) => (text.length >= 2 ? lookupPlaces(text, { country, near }) : [])} minLength={0}
         placeholder={country ? `All of ${country}` : 'Any city, state or ZIP'} aria-label="Where: city, state or ZIP" />
+      {/* Right under the Where box on a phone, so it is a thumb away; on a
+          computer it sits beside Clear. Teal outline when on, so it is plain
+          the list is ordered from here. */}
+      <button type="button" onClick={nearMe} disabled={finding} aria-pressed={!!spot}
+        className={`secondary md:order-1 md:col-span-2 ${spot ? 'border-brand-teal bg-brand-tint text-brand-teal' : ''}`}>
+        <LocateFixed size={16} className="text-brand-teal" />{finding ? 'Finding you…' : 'Near me'}
+      </button>
       <CountrySelect wrapperClassName="md:col-span-2" labelClassName="left-3 right-9 mt-0.5 text-sm" className="field" providers={providers} value={country} onChange={chooseCountry} />
       <select className="field md:col-span-2" value={category} onChange={(e) => setCategory(e.target.value)}>
         <option value="">All categories</option>
@@ -289,13 +328,14 @@ export default function Browse() {
       <select className="field md:col-span-3" value={owned} onChange={(e) => setOwned(e.target.value)} aria-label="Jewish-owned or not">
         {OWNERSHIP_FILTERS.map((f) => <option key={f.id || 'all'} value={f.id}>{f.id ? f.label : 'Jewish-owned or not: All'}</option>)}
       </select>
-      <label className={`flex items-center gap-2 px-2 text-sm ${showKitchen ? 'md:col-span-4' : 'md:col-span-7'}`}>
+      <label className={`flex items-center gap-2 px-2 text-sm ${showKitchen ? 'md:col-span-2' : 'md:col-span-5'}`}>
         <input type="checkbox" checked={verified} onChange={(e) => setVerified(e.target.checked)} /> Verified only
       </label>
       {/* Last of the filters, and filled teal so it reads as the one action in a stack of boxes. */}
-      <button type="button" onClick={clearFilters} className="clear-filters md:col-span-2"><X size={16} />Clear</button>
+      <button type="button" onClick={clearFilters} className="clear-filters md:order-2 md:col-span-2">Clear</button>
     </div>
 
+    {locationOff && <p role="status" className="-mt-3 mb-4 flex items-center gap-1.5 rounded-lg bg-brand-gold-bg/60 px-3 py-2 text-sm font-medium text-brand-gold-ink"><MapPin size={14} className="shrink-0" />Location is off, type your city instead.</p>}
     {/* No location yet: ask for one rather than guess. Until then the list is
         Most Used. Kept to one quiet line so it never pushes the results down. */}
     {!located && providers.length > 0 && <div className="mb-4 rounded-lg bg-brand-surface px-3 py-2 text-sm ring-1 ring-brand-line">
@@ -316,7 +356,12 @@ export default function Browse() {
     </div>}
     {/* Says what "closest" is measured from, so the order explains itself. A
         guest can change it; a member's comes from their profile city. */}
-    {sort === 'nearest' && !(urlLat && urlLng) && <p className="-mt-3 mb-4 flex flex-wrap items-center gap-x-2 px-1 text-xs text-brand-muted">
+    {sort === 'nearest' && spot && <p className="-mt-3 mb-4 flex flex-wrap items-center gap-x-2 px-1 text-xs text-brand-muted">
+      <LocateFixed size={13} className="shrink-0 text-brand-teal" />
+      <span>Closest to where you are now first{spot.city ? ` (near ${spot.city})` : ''}.</span>
+      {me.lat != null && <button type="button" onClick={leaveNearMe} className="font-semibold text-brand-teal underline-offset-2 hover:underline">Use {me.city || 'my saved location'} instead</button>}
+    </p>}
+    {sort === 'nearest' && !spot && <p className="-mt-3 mb-4 flex flex-wrap items-center gap-x-2 px-1 text-xs text-brand-muted">
       <MapPin size={13} className="shrink-0 text-brand-teal" />
       <span>Closest to {me.city || 'your location'} first{me.source === 'profile' ? ' (your profile city)' : ''}{everyday ? ', with food and gemachs nearby leading' : ''}.</span>
       {me.source !== 'profile' && <button type="button" onClick={() => { me.forget(); setSettingCity(true); }} className="font-semibold text-brand-teal underline-offset-2 hover:underline">Change</button>}
