@@ -783,6 +783,17 @@ for (const [method, path, body] of tries) {
 }
 ok((await meOf(admin)).role === 'admin', 'the master admin is still an admin');
 ok((await call('PUT', `/users/${otherAdminId}/role`, { token: admin, body: { role: 'user' } })).status === 200, 'the master admin can still remove another admin');
+const handNoWord = await call('POST', `/users/${otherAdminId}/hand-over-master`, { token: admin, body: {} });
+ok(handNoWord.status === 400, 'handing over needs CONFIRM typed', String(handNoWord.status));
+const handByOther = await call('POST', `/users/${masterSelf.id}/hand-over-master`, { token: userB, body: { confirm: 'CONFIRM' } });
+ok(handByOther.status === 403, 'only the master admin can hand it over', String(handByOther.status));
+const handed = await call('POST', `/users/${otherAdminId}/hand-over-master`, { token: admin, body: { confirm: 'CONFIRM' } });
+ok(handed.status === 200 && (await meOf(userB)).master_admin === true && (await meOf(userB)).role === 'admin', 'the master admin hands it over', String(handed.status));
+ok((await meOf(admin)).master_admin === false && (await meOf(admin)).role === 'admin', 'the old master stays an admin without the protection');
+ok((await call('PUT', `/users/${otherAdminId}/role`, { token: admin, body: { role: 'user' } })).status === 403, 'the old master cannot demote the new one');
+const handBack = await call('POST', `/users/${masterSelf.id}/hand-over-master`, { token: userB, body: { confirm: 'CONFIRM' } });
+ok(handBack.status === 200 && (await meOf(admin)).master_admin === true, 'the new master hands it back');
+ok((await call('PUT', `/users/${otherAdminId}/role`, { token: admin, body: { role: 'user' } })).status === 200 && (await meOf(userB)).master_admin === false, 'and is an ordinary member again once demoted');
 
 // ---- a listing that turns private takes its vouches with it --------------
 // The dangerous case is not a listing that was always sensitive — vouching on

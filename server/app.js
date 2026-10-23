@@ -739,6 +739,25 @@ app.get('/api/users', requireAuth, async (req, res, next) => {
 // delete it; the master admin can still do all of that to every other admin.
 const protectedMaster = (target, actor) => userToPublic(target).master_admin === true && target.id !== actor?.id;
 const MASTER_LOCKED = 'This is the master admin account. Only its owner can change it.';
+// Only the master admin, and only with the word typed, hands it to another
+// account. They become an admin and the master; the old master stays an
+// admin, now without the protection.
+const HAND_OVER_WORD = 'CONFIRM';
+app.post('/api/users/:id/hand-over-master', requireAdmin, async (req, res, next) => {
+  try {
+    if (req.user.master_admin !== true) return res.status(403).json({ error: 'Only the master admin can hand it over.' });
+    if (String(req.body?.confirm || '').trim() !== HAND_OVER_WORD) return res.status(400).json({ error: `Type ${HAND_OVER_WORD} to hand over master admin.` });
+    const target = await users.byId(req.params.id);
+    if (!target) return res.status(404).json({ error: 'Not found' });
+    if (target.id === req.user.id) return res.status(400).json({ error: 'You are already the master admin.' });
+    if (target.email === GUEST_EMAIL) return res.status(400).json({ error: 'The guest account cannot be the master admin.' });
+    if (target.data?.disabled === true) return res.status(400).json({ error: 'Unsuspend this account first.' });
+    const updated = await users.update(target.id, { role: 'admin', master_admin: true });
+    const me = await users.update(req.user.id, { role: 'admin', master_admin: false });
+    await store.create('ActivityEvent', { type: 'master_admin_handover', target_id: target.id, from: req.user.id }, req.user);
+    res.json({ to: userToPublic(updated), from: userToPublic(me) });
+  } catch (err) { next(err); }
+});
 
 // Admin only: hand a locked-out member a temporary password. Shown once to
 // the admin, never stored in the clear, and every use is audited. This is

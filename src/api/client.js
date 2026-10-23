@@ -370,6 +370,7 @@ export const api = {
   invites: { get: (code) => request('GET', `/invites/${encodeURIComponent(code)}`) },
   admin: {
     setRole: (id, role) => request('PUT', `/users/${encodeURIComponent(id)}/role`, { body: { role } }),
+    handOverMaster: (id, confirm) => request('POST', `/users/${encodeURIComponent(id)}/hand-over-master`, { body: { confirm } }),
     resetPassword: (id) => request('POST', `/users/${encodeURIComponent(id)}/reset-password`),
     updateUser: (id, patch) => request('PUT', `/users/${encodeURIComponent(id)}`, { body: patch }),
     deleteUser: (id) => request('DELETE', `/users/${encodeURIComponent(id)}`),
